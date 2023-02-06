@@ -62,6 +62,16 @@ impl BitOr for TernaryValue {
     }
 }
 
+impl TernaryValue {
+    pub fn not_if(self, x: bool) -> Self {
+        if x {
+            !self
+        } else {
+            self
+        }
+    }
+}
+
 impl Aig {
     pub fn ternary_simulate(
         &self,
@@ -80,16 +90,10 @@ impl Aig {
         }
         for i in self.nodes_range() {
             if self.nodes[i].is_and() {
-                let fanin0 = if self.nodes[i].fanin0().compl() {
-                    !ans[self.nodes[i].fanin0().node_id()]
-                } else {
-                    ans[self.nodes[i].fanin0().node_id()]
-                };
-                let fanin1 = if self.nodes[i].fanin1().compl() {
-                    !ans[self.nodes[i].fanin1().node_id()]
-                } else {
-                    ans[self.nodes[i].fanin1().node_id()]
-                };
+                let fanin0 =
+                    ans[self.nodes[i].fanin0().node_id()].not_if(self.nodes[i].fanin0().compl());
+                let fanin1 =
+                    ans[self.nodes[i].fanin1().node_id()].not_if(self.nodes[i].fanin1().compl());
                 ans[i] = fanin0 & fanin1;
             }
         }
