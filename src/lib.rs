@@ -1,10 +1,12 @@
 mod aiger;
 mod cnf;
 mod display;
+mod ternary;
 
 pub use ::aiger::*;
 pub use cnf::*;
 pub use display::*;
+pub use ternary::*;
 
 use logic_form::Lit;
 use std::{
