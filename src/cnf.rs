@@ -3,10 +3,12 @@ use logic_form::{Clause, Cnf, Lit};
 use std::collections::HashSet;
 
 impl Aig {
-    pub fn get_cnf(&self, root: AigEdge) -> Cnf {
-        assert!(root != AigEdge::constant_edge(true) && root != AigEdge::constant_edge(false));
+    pub fn get_cnf(&self, logic: &[AigEdge]) -> Cnf {
         let mut refs = HashSet::new();
-        refs.insert(root);
+        for l in logic {
+            assert!(*l != AigEdge::constant_edge(true) && *l != AigEdge::constant_edge(false));
+            refs.insert(*l);
+        }
         let mut ans = Cnf::new();
         for i in self.nodes_range().rev() {
             let edge: AigEdge = self.nodes[i].node_id().into();
@@ -46,10 +48,9 @@ impl Aig {
                 }
             }
         }
-        ans.push(Clause::from([Lit::new(
-            root.node_id().into(),
-            root.compl(),
-        )]));
+        for l in logic {
+            ans.push(Clause::from([Lit::new(l.node_id().into(), l.compl())]));
+        }
         ans
     }
 }

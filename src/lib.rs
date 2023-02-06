@@ -15,7 +15,7 @@ use std::{
     vec,
 };
 
-type AigNodeId = usize;
+pub type AigNodeId = usize;
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct AigEdge {
@@ -88,9 +88,9 @@ impl AigEdge {
 
 #[derive(Debug, Clone)]
 pub struct AigLatch {
-    input: AigNodeId,
-    next: AigEdge,
-    init: bool,
+    pub input: AigNodeId,
+    pub next: AigEdge,
+    pub init: bool,
 }
 
 impl AigLatch {
