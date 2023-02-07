@@ -32,10 +32,25 @@ impl DerefMut for AigClause {
     }
 }
 
-impl<const N: usize> From<[AigEdge; N]> for AigClause {
-    fn from(s: [AigEdge; N]) -> Self {
+impl Not for AigClause {
+    type Output = AigCube;
+
+    fn not(self) -> Self::Output {
+        let lits = self.lits.iter().map(|lit| !*lit).collect();
+        AigCube { lits }
+    }
+}
+
+impl<F: Into<Vec<AigEdge>>> From<F> for AigClause {
+    fn from(value: F) -> Self {
+        Self { lits: value.into() }
+    }
+}
+
+impl FromIterator<AigEdge> for AigClause {
+    fn from_iter<T: IntoIterator<Item = AigEdge>>(iter: T) -> Self {
         Self {
-            lits: <[AigEdge]>::into_vec(Box::new(s)),
+            lits: Vec::from_iter(iter),
         }
     }
 }
@@ -77,6 +92,20 @@ impl Not for AigCube {
     fn not(self) -> Self::Output {
         let lits = self.lits.iter().map(|lit| !*lit).collect();
         AigClause { lits }
+    }
+}
+
+impl<F: Into<Vec<AigEdge>>> From<F> for AigCube {
+    fn from(value: F) -> Self {
+        Self { lits: value.into() }
+    }
+}
+
+impl FromIterator<AigEdge> for AigCube {
+    fn from_iter<T: IntoIterator<Item = AigEdge>>(iter: T) -> Self {
+        Self {
+            lits: Vec::from_iter(iter),
+        }
     }
 }
 

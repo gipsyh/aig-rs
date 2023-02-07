@@ -2,12 +2,14 @@ mod aiger;
 mod cnf;
 mod display;
 mod logic_form;
+mod others;
 mod ternary;
 
 pub use crate::aiger::*;
 pub use crate::logic_form::*;
 pub use cnf::*;
 pub use display::*;
+pub use others::*;
 pub use ternary::*;
 
 use ::logic_form::Lit;
@@ -76,6 +78,14 @@ impl AigEdge {
 
     pub fn set_compl(&mut self, compl: bool) {
         self.complement = compl
+    }
+
+    pub fn not_if(self, x: bool) -> Self {
+        if x {
+            !self
+        } else {
+            self
+        }
     }
 
     pub fn constant_edge(polarity: bool) -> Self {
@@ -417,15 +427,6 @@ impl Aig {
 }
 
 impl Aig {
-    pub fn latch_init_equation(&mut self) -> AigEdge {
-        let equals: Vec<AigEdge> = self
-            .latchs
-            .iter()
-            .map(|l| AigEdge::new(l.input, !l.init))
-            .collect();
-        self.new_and_nodes(equals)
-    }
-
     pub fn transfer_latch_outputs_into_pinputs(
         &mut self,
     ) -> (Vec<(AigNodeId, AigNodeId)>, AigEdge) {
