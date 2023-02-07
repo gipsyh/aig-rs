@@ -2,23 +2,23 @@ use crate::AigEdge;
 use std::ops::{Add, Deref, DerefMut, Not};
 
 #[derive(Clone, Debug)]
-pub struct Clause {
+pub struct AigClause {
     lits: Vec<AigEdge>,
 }
 
-impl Clause {
+impl AigClause {
     pub fn new() -> Self {
-        Clause { lits: Vec::new() }
+        AigClause { lits: Vec::new() }
     }
 }
 
-impl Default for Clause {
+impl Default for AigClause {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Deref for Clause {
+impl Deref for AigClause {
     type Target = Vec<AigEdge>;
 
     fn deref(&self) -> &Self::Target {
@@ -26,13 +26,13 @@ impl Deref for Clause {
     }
 }
 
-impl DerefMut for Clause {
+impl DerefMut for AigClause {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.lits
     }
 }
 
-impl<const N: usize> From<[AigEdge; N]> for Clause {
+impl<const N: usize> From<[AigEdge; N]> for AigClause {
     fn from(s: [AigEdge; N]) -> Self {
         Self {
             lits: <[AigEdge]>::into_vec(Box::new(s)),
@@ -41,23 +41,23 @@ impl<const N: usize> From<[AigEdge; N]> for Clause {
 }
 
 #[derive(Clone, Debug)]
-pub struct Cube {
+pub struct AigCube {
     lits: Vec<AigEdge>,
 }
 
-impl Cube {
+impl AigCube {
     pub fn new() -> Self {
-        Cube { lits: Vec::new() }
+        AigCube { lits: Vec::new() }
     }
 }
 
-impl Default for Cube {
+impl Default for AigCube {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Deref for Cube {
+impl Deref for AigCube {
     type Target = Vec<AigEdge>;
 
     fn deref(&self) -> &Self::Target {
@@ -65,94 +65,94 @@ impl Deref for Cube {
     }
 }
 
-impl DerefMut for Cube {
+impl DerefMut for AigCube {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.lits
     }
 }
 
-impl Not for Cube {
-    type Output = Clause;
+impl Not for AigCube {
+    type Output = AigClause;
 
     fn not(self) -> Self::Output {
         let lits = self.lits.iter().map(|lit| !*lit).collect();
-        Clause { lits }
+        AigClause { lits }
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct Cnf {
-    clauses: Vec<Clause>,
+pub struct AigCnf {
+    clauses: Vec<AigClause>,
 }
 
-impl Cnf {
+impl AigCnf {
     pub fn new() -> Self {
         Self {
             clauses: Vec::new(),
         }
     }
 
-    pub fn add_clause(&mut self, clause: Clause) {
+    pub fn add_clause(&mut self, clause: AigClause) {
         self.clauses.push(clause);
     }
 }
 
-impl Default for Cnf {
+impl Default for AigCnf {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Deref for Cnf {
-    type Target = Vec<Clause>;
+impl Deref for AigCnf {
+    type Target = Vec<AigClause>;
 
     fn deref(&self) -> &Self::Target {
         &self.clauses
     }
 }
 
-impl DerefMut for Cnf {
+impl DerefMut for AigCnf {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.clauses
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct Dnf {
-    cubes: Vec<Cube>,
+pub struct AigDnf {
+    cubes: Vec<AigCube>,
 }
 
-impl Dnf {
+impl AigDnf {
     pub fn new() -> Self {
         Self { cubes: Vec::new() }
     }
 
-    pub fn add_cube(&mut self, cube: Cube) {
+    pub fn add_cube(&mut self, cube: AigCube) {
         self.cubes.push(cube);
     }
 }
 
-impl Default for Dnf {
+impl Default for AigDnf {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Deref for Dnf {
-    type Target = Vec<Cube>;
+impl Deref for AigDnf {
+    type Target = Vec<AigCube>;
 
     fn deref(&self) -> &Self::Target {
         &self.cubes
     }
 }
 
-impl DerefMut for Dnf {
+impl DerefMut for AigDnf {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.cubes
     }
 }
 
-impl Add for Dnf {
+impl Add for AigDnf {
     type Output = Self;
 
     fn add(mut self, mut rhs: Self) -> Self::Output {
@@ -161,11 +161,11 @@ impl Add for Dnf {
     }
 }
 
-impl Not for Dnf {
-    type Output = Cnf;
+impl Not for AigDnf {
+    type Output = AigCnf;
 
     fn not(self) -> Self::Output {
-        let mut cnf = Cnf::new();
+        let mut cnf = AigCnf::new();
         for cube in self.cubes {
             cnf.add_clause(!cube);
         }
