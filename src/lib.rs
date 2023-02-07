@@ -1,14 +1,16 @@
 mod aiger;
 mod cnf;
 mod display;
+mod logic_form;
 mod ternary;
 
-pub use ::aiger::*;
+pub use crate::aiger::*;
+pub use crate::logic_form::*;
 pub use cnf::*;
 pub use display::*;
 pub use ternary::*;
 
-use logic_form::Lit;
+use ::logic_form::Lit;
 use std::{
     cmp::Reverse,
     collections::BinaryHeap,
