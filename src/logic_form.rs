@@ -1,5 +1,8 @@
 use crate::AigEdge;
-use std::ops::{Add, Deref, DerefMut, Not};
+use std::{
+    collections::HashSet,
+    ops::{Add, Deref, DerefMut, Not},
+};
 
 #[derive(Clone, Debug)]
 pub struct AigClause {
@@ -63,6 +66,12 @@ pub struct AigCube {
 impl AigCube {
     pub fn new() -> Self {
         AigCube { lits: Vec::new() }
+    }
+
+    pub fn subsume(&self, cube: &AigCube) -> bool {
+        let x_lit_set = self.iter().collect::<HashSet<&AigEdge>>();
+        let y_lit_set = cube.iter().collect::<HashSet<&AigEdge>>();
+        x_lit_set.is_subset(&y_lit_set)
     }
 }
 
@@ -157,6 +166,19 @@ impl AigDnf {
     }
 
     pub fn add_cube(&mut self, cube: AigCube) {
+        self.cubes.push(cube);
+    }
+
+    pub fn add_cube_with_subsume_check(&mut self, cube: AigCube) {
+        let mut i = 0;
+        while i < self.cubes.len() {
+            if cube.subsume(&self.cubes[i]) {
+                self.cubes.swap_remove(i);
+            } else if self.cubes[i].subsume(&cube) {
+                return;
+            }
+            i += 1;
+        }
         self.cubes.push(cube);
     }
 }
