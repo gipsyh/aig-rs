@@ -13,6 +13,10 @@ impl AigClause {
     pub fn new() -> Self {
         AigClause { lits: Vec::new() }
     }
+
+    pub fn to_clause(&self) -> ::logic_form::Clause {
+        self.iter().map(|e| e.to_lit()).collect()
+    }
 }
 
 impl Default for AigClause {
@@ -72,6 +76,10 @@ impl AigCube {
         let x_lit_set = self.iter().collect::<HashSet<&AigEdge>>();
         let y_lit_set = cube.iter().collect::<HashSet<&AigEdge>>();
         x_lit_set.is_subset(&y_lit_set)
+    }
+
+    pub fn to_cube(&self) -> ::logic_form::Cube {
+        self.iter().map(|e| e.to_lit()).collect()
     }
 }
 
