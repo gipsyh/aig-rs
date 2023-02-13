@@ -95,6 +95,13 @@ impl AigEdge {
         }
     }
 
+    pub fn from_lit(lit: Lit) -> Self {
+        Self {
+            id: lit.var().into(),
+            complement: lit.compl(),
+        }
+    }
+
     pub fn to_lit(&self) -> Lit {
         Lit::new(self.id.into(), self.complement)
     }

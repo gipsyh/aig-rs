@@ -72,6 +72,16 @@ impl TernaryValue {
     }
 }
 
+impl From<bool> for TernaryValue {
+    fn from(value: bool) -> Self {
+        if value {
+            TernaryValue::True
+        } else {
+            TernaryValue::False
+        }
+    }
+}
+
 impl Aig {
     pub fn ternary_simulate(
         &self,

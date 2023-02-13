@@ -81,6 +81,10 @@ impl AigCube {
     pub fn to_cube(&self) -> ::logic_form::Cube {
         self.iter().map(|e| e.to_lit()).collect()
     }
+
+    pub fn from_cube(cube: ::logic_form::Cube) -> Self {
+        AigCube::from_iter(cube.iter().map(|l| AigEdge::from_lit(*l)))
+    }
 }
 
 impl Default for AigCube {
