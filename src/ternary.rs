@@ -1,7 +1,10 @@
-use crate::Aig;
-use std::ops::{BitAnd, BitOr, Not};
+use crate::{Aig, AigNodeId};
+use std::{
+    collections::VecDeque,
+    ops::{BitAnd, BitOr, Not},
+};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TernaryValue {
     True,
     False,
@@ -108,5 +111,33 @@ impl Aig {
             }
         }
         ans
+    }
+
+    pub fn update_ternary_simulate(
+        &self,
+        mut simulation: Vec<TernaryValue>,
+        input: AigNodeId,
+        value: TernaryValue,
+    ) -> Vec<TernaryValue> {
+        assert!(simulation[input] != value);
+        simulation[input] = value;
+        let mut queue = VecDeque::new();
+        for out in self.nodes[input].fanouts.iter() {
+            queue.push_back(out.node_id());
+        }
+        while let Some(node) = queue.pop_front() {
+            let fanin0 = simulation[self.nodes[node].fanin0().node_id()]
+                .not_if(self.nodes[node].fanin0().compl());
+            let fanin1 = simulation[self.nodes[node].fanin1().node_id()]
+                .not_if(self.nodes[node].fanin1().compl());
+            let value = fanin0 & fanin1;
+            if value != simulation[node] {
+                simulation[node] = value;
+                for out in self.nodes[node].fanouts.iter() {
+                    queue.push_back(out.node_id());
+                }
+            }
+        }
+        simulation
     }
 }

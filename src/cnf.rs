@@ -1,4 +1,4 @@
-use crate::{Aig, AigEdge};
+use crate::{Aig, AigEdge, AigNodeId};
 use logic_form::{Clause, Cnf, Lit};
 use std::collections::HashSet;
 
@@ -86,5 +86,66 @@ impl Aig {
             }
         }
         ans
+    }
+
+    fn rec_get_block(
+        &self,
+        node: AigNodeId,
+        block: &mut Vec<AigEdge>,
+        visit: &mut HashSet<AigNodeId>,
+    ) {
+        if visit.contains(&node) {
+            return;
+        }
+        visit.insert(node);
+        if self.nodes[node].is_and() {
+            let mut closure = |fanin: AigEdge| {
+                if fanin.compl() {
+                    if !visit.contains(&fanin.node_id()) {
+                        visit.insert(fanin.node_id());
+                        block.push(fanin);
+                    }
+                } else {
+                    self.rec_get_block(fanin.node_id(), block, visit);
+                }
+            };
+            closure(self.nodes[node].fanin0());
+            closure(self.nodes[node].fanin1());
+        } else {
+            block.push(node.into());
+        }
+    }
+
+    fn rec_get_block_cnf(&self, node: AigNodeId, visit: &mut HashSet<AigNodeId>, cnf: &mut Cnf) {
+        if visit.contains(&node) {
+            return;
+        }
+        visit.insert(node);
+        if !self.nodes[node].is_and() {
+            return;
+        }
+        let mut block = Vec::new();
+        self.rec_get_block(node, &mut block, &mut HashSet::new());
+        let node_lit = AigEdge::new(node, false).to_lit();
+        let mut clause = Clause::from([node_lit]);
+        for block_node in block {
+            self.rec_get_block_cnf(block_node.node_id(), visit, cnf);
+            let block_node = block_node.to_lit();
+            cnf.push(Clause::from([!node_lit, block_node]));
+            clause.push(!block_node);
+        }
+        cnf.push(clause);
+    }
+
+    pub fn get_block_optimized_cnf(&self) -> Cnf {
+        let mut cnf = Cnf::new();
+        let mut visit = HashSet::new();
+        for l in self.latchs.iter() {
+            self.rec_get_block_cnf(l.next.node_id(), &mut visit, &mut cnf);
+        }
+        for bad in self.bads.iter() {
+            self.rec_get_block_cnf(bad.node_id(), &mut visit, &mut cnf);
+        }
+        cnf
     }
 }
