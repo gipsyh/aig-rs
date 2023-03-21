@@ -1,10 +1,15 @@
 [package]
-name = "aig-rs"
+name = "aig"
 version = "0.1.0"
+license = "MIT"
+description = "Rust Aig library"
 edition = "2021"
+repository = "https://github.com/gipsyh/aig-rs"
+authors = ["Yuheng Su <gipsyh.icu@gmail.com>"]
+keywords = ["logic", "aig", "formal method", "model checking"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 aiger = { git = "https://github.com/gipsyh/aiger-rust.git" }
-logic-form = { path = "../logic-form" }
+logic-form = "0.1.1"
