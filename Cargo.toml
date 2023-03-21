@@ -6,7 +6,7 @@ description = "Rust Aig library"
 edition = "2021"
 repository = "https://github.com/gipsyh/aig-rs"
 authors = ["Yuheng Su <gipsyh.icu@gmail.com>"]
-keywords = ["logic", "aig", "formal method", "model checking"]
+keywords = ["logic", "aig", "formal_method", "model_checking"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
