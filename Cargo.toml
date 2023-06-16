@@ -12,4 +12,4 @@ keywords = ["logic", "aig", "formal_method", "model_checking"]
 
 [dependencies]
 aiger = { package = "gipsyh-aiger", version = "0.3.0" }
-logic-form = "0.1.1"
+logic-form = { version = "0.1.1", path = "../logic-form" }
