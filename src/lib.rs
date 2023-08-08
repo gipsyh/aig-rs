@@ -98,12 +98,12 @@ impl AigEdge {
     pub fn from_lit(lit: Lit) -> Self {
         Self {
             id: lit.var().into(),
-            complement: lit.compl(),
+            complement: !lit.polarity(),
         }
     }
 
     pub fn to_lit(&self) -> Lit {
-        Lit::new(self.id.into(), self.complement)
+        Lit::new(self.id.into(), !self.complement)
     }
 }
 
