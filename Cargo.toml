@@ -11,5 +11,5 @@ keywords = ["logic", "aig", "formal_method", "model_checking"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-aiger = { package = "gipsyh-aiger", version = "0.3.0" }
+aiger = { package = "gipsyh-aiger", path = "../aiger-rs" }
 logic-form = { version = "0.1.1", path = "../logic-form" }

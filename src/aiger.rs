@@ -38,10 +38,11 @@ impl Aig {
         let mut nodes: Vec<AigNode> = Vec::with_capacity(header.i + header.l + header.a + 1);
         let nodes_remaining = nodes.spare_capacity_mut();
         nodes_remaining[0].write(AigNode::new_false(0));
-        let mut outputs = Vec::new();
-        let mut bads = Vec::new();
         let mut inputs = Vec::new();
         let mut latchs = Vec::new();
+        let mut outputs = Vec::new();
+        let mut bads = Vec::new();
+        let mut constraints = Vec::new();
         for obj in aiger.records() {
             let obj = obj.unwrap();
             match obj {
@@ -65,6 +66,9 @@ impl Aig {
                 }
                 aiger::Aiger::Output(o) => outputs.push(AigEdge::new(o.0 / 2, o.0 & 0x1 != 0)),
                 aiger::Aiger::BadState(b) => bads.push(AigEdge::new(b.0 / 2, b.0 & 0x1 != 0)),
+                aiger::Aiger::Constraint(c) => {
+                    constraints.push(AigEdge::new(c.0 / 2, c.0 & 0x1 != 0))
+                }
                 aiger::Aiger::AndGate { output, inputs } => {
                     let id = output.0 / 2;
                     nodes_remaining[id].write(AigNode::new_and(
@@ -88,6 +92,7 @@ impl Aig {
             latchs,
             outputs,
             bads,
+            constraints,
         };
         ret.setup_levels();
         ret.setup_fanouts();

@@ -234,6 +234,7 @@ pub struct Aig {
     pub latchs: Vec<AigLatch>,
     pub outputs: Vec<AigEdge>,
     pub bads: Vec<AigEdge>,
+    pub constraints: Vec<AigEdge>,
 }
 
 impl Aig {
@@ -244,6 +245,7 @@ impl Aig {
             latchs: Vec::new(),
             outputs: Vec::new(),
             bads: Vec::new(),
+            constraints: Vec::new(),
         }
     }
 
