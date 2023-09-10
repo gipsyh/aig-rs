@@ -85,6 +85,9 @@ impl Aig {
                 ]));
             }
         }
+        for c in self.constraints.iter() {
+            ans.push(Clause::from([c.to_lit()]));
+        }
         ans
     }
 

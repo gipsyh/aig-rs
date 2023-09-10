@@ -111,11 +111,11 @@ impl AigEdge {
 pub struct AigLatch {
     pub input: AigNodeId,
     pub next: AigEdge,
-    pub init: bool,
+    pub init: Option<bool>,
 }
 
 impl AigLatch {
-    pub fn new(input: AigNodeId, next: AigEdge, init: bool) -> Self {
+    pub fn new(input: AigNodeId, next: AigEdge, init: Option<bool>) -> Self {
         Self { input, next, init }
     }
 }
