@@ -78,11 +78,11 @@ impl AigCube {
         x_lit_set.is_subset(&y_lit_set)
     }
 
-    pub fn to_cube(&self) -> ::logic_form::Cube {
+    pub fn to_cube(&self) -> logic_form::Cube {
         self.iter().map(|e| e.to_lit()).collect()
     }
 
-    pub fn from_cube(cube: ::logic_form::Cube) -> Self {
+    pub fn from_cube(cube: &logic_form::Cube) -> Self {
         AigCube::from_iter(cube.iter().map(|l| AigEdge::from_lit(*l)))
     }
 }
