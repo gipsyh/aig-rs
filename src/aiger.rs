@@ -2,18 +2,6 @@ use crate::{Aig, AigEdge, AigLatch, AigNode};
 use std::{io, path::Path};
 
 impl Aig {
-    fn setup_levels(&mut self) {
-        let mut levels = vec![0; self.num_nodes()];
-        for and in self.ands_iter() {
-            let fanin0 = and.fanin0().node_id();
-            let fanin1 = and.fanin1().node_id();
-            levels[and.node_id()] = levels[fanin0].max(levels[fanin1]) + 1;
-        }
-        for (id, node) in levels.iter().enumerate() {
-            self.nodes[id].level = *node;
-        }
-    }
-
     fn setup_fanouts(&mut self) {
         for id in self.nodes_range() {
             if self.nodes[id].is_and() {
@@ -75,7 +63,6 @@ impl Aig {
                         id,
                         AigEdge::new(inputs[0].0 / 2, inputs[0].0 & 0x1 != 0),
                         AigEdge::new(inputs[1].0 / 2, inputs[1].0 & 0x1 != 0),
-                        0,
                     ));
                 }
                 aiger::Aiger::Symbol {
@@ -94,7 +81,6 @@ impl Aig {
             bads,
             constraints,
         };
-        ret.setup_levels();
         ret.setup_fanouts();
         Ok(ret)
     }
