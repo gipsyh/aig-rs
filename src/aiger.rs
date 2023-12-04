@@ -36,7 +36,7 @@ impl Aig {
             match obj {
                 aiger::Aiger::Input(input) => {
                     let id = input.0 / 2;
-                    nodes_remaining[id].write(AigNode::new_prime_input(id));
+                    nodes_remaining[id].write(AigNode::new_input(id));
                     inputs.push(id);
                 }
                 aiger::Aiger::Latch {
@@ -45,7 +45,7 @@ impl Aig {
                     init,
                 } => {
                     let id = output.0 / 2;
-                    nodes_remaining[id].write(AigNode::new_latch_input(id));
+                    nodes_remaining[id].write(AigNode::new_input(id));
                     latchs.push(AigLatch::new(
                         id,
                         AigEdge::new(input.0 / 2, input.0 & 0x1 != 0),

@@ -116,8 +116,7 @@ impl AigLatch {
 #[derive(Debug, Clone)]
 pub enum AigNodeType {
     False,
-    PrimeInput,
-    LatchInput,
+    Input,
     And(AigEdge, AigEdge),
 }
 
@@ -137,12 +136,8 @@ impl AigNode {
         matches!(self.typ, AigNodeType::And(_, _))
     }
 
-    pub fn is_prime_input(&self) -> bool {
-        matches!(self.typ, AigNodeType::PrimeInput)
-    }
-
-    pub fn is_latch_input(&self) -> bool {
-        matches!(self.typ, AigNodeType::LatchInput)
+    pub fn is_input(&self) -> bool {
+        matches!(self.typ, AigNodeType::Input)
     }
 
     pub fn fanin0(&self) -> AigEdge {
@@ -187,18 +182,10 @@ impl AigNode {
         }
     }
 
-    fn new_prime_input(id: usize) -> Self {
+    fn new_input(id: usize) -> Self {
         Self {
             id,
-            typ: AigNodeType::PrimeInput,
-            fanouts: Vec::new(),
-        }
-    }
-
-    fn new_latch_input(id: usize) -> Self {
-        Self {
-            id,
-            typ: AigNodeType::LatchInput,
+            typ: AigNodeType::Input,
             fanouts: Vec::new(),
         }
     }
@@ -239,13 +226,16 @@ impl Aig {
 
     pub fn new_input_node(&mut self) -> AigNodeId {
         let nodeid = self.nodes.len();
-        let input = AigNode::new_prime_input(nodeid);
+        let input = AigNode::new_input(nodeid);
         self.nodes.push(input);
         self.inputs.push(nodeid);
         nodeid
     }
 
-    #[inline]
+    pub fn new_latch(&mut self, input: AigNodeId, next: AigEdge, init: Option<bool>) {
+        self.latchs.push(AigLatch::new(input, next, init))
+    }
+
     pub fn new_and_node(&mut self, mut fanin0: AigEdge, mut fanin1: AigEdge) -> AigEdge {
         if fanin0.node_id() > fanin1.node_id() {
             swap(&mut fanin0, &mut fanin1);
@@ -301,12 +291,6 @@ impl Aig {
     pub fn ands_iter(&self) -> impl Iterator<Item = &AigNode> {
         self.nodes
             .iter()
-            .filter(|node| matches!(node.typ, AigNodeType::And(_, _)))
-    }
-
-    pub fn ands_iter_mut(&mut self) -> impl Iterator<Item = &mut AigNode> {
-        self.nodes
-            .iter_mut()
             .filter(|node| matches!(node.typ, AigNodeType::And(_, _)))
     }
 
