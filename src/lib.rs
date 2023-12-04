@@ -244,6 +244,45 @@ impl Aig {
         self.inputs.push(nodeid);
         nodeid
     }
+
+    #[inline]
+    pub fn new_and_node(&mut self, mut fanin0: AigEdge, mut fanin1: AigEdge) -> AigEdge {
+        if fanin0.node_id() > fanin1.node_id() {
+            swap(&mut fanin0, &mut fanin1);
+        }
+        if fanin0 == AigEdge::constant_edge(true) {
+            return fanin1;
+        }
+        if fanin0 == AigEdge::constant_edge(false) {
+            return AigEdge::constant_edge(false);
+        }
+        if fanin1 == AigEdge::constant_edge(true) {
+            return fanin0;
+        }
+        if fanin1 == AigEdge::constant_edge(false) {
+            return AigEdge::constant_edge(false);
+        }
+        if fanin0 == fanin1 {
+            fanin0
+        } else if fanin0 == !fanin1 {
+            AigEdge::constant_edge(false)
+        } else {
+            let nodeid = self.nodes.len();
+            let and = AigNode::new_and(nodeid, fanin0, fanin1);
+            self.nodes.push(and);
+            self.nodes[fanin0.id]
+                .fanouts
+                .push(AigEdge::new(nodeid, fanin0.compl()));
+            self.nodes[fanin1.id]
+                .fanouts
+                .push(AigEdge::new(nodeid, fanin1.compl()));
+            nodeid.into()
+        }
+    }
+
+    pub fn new_or_node(&mut self, fanin0: AigEdge, fanin1: AigEdge) -> AigEdge {
+        !self.new_and_node(!fanin0, !fanin1)
+    }
 }
 
 impl Aig {
