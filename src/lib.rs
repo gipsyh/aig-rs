@@ -100,7 +100,7 @@ impl AigEdge {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct AigLatch {
     pub input: AigNodeId,
     pub next: AigEdge,
