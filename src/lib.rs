@@ -124,7 +124,7 @@ pub enum AigNodeType {
 pub struct AigNode {
     id: AigNodeId,
     typ: AigNodeType,
-    fanouts: Vec<AigEdge>,
+    pub fanouts: Vec<AigEdge>,
 }
 
 impl AigNode {
