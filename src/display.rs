@@ -84,7 +84,18 @@ impl Display for Aig {
                 self.nodes[self.bads[idx].node_id()]
             )?;
         }
+        writeln!(f, "------------------")?;
+        for idx in 0..self.constraints.len() {
+            writeln!(
+                f,
+                "C{}: {}{}",
+                idx + 1,
+                self.constraints[idx],
+                self.nodes[self.constraints[idx].node_id()]
+            )?;
+        }
         writeln!(f, "==================")?;
+
         Ok(())
     }
 }
