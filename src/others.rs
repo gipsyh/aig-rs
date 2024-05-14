@@ -98,4 +98,49 @@ impl Aig {
             constraints,
         }
     }
+
+    pub fn unroll(&self) -> Aig {
+        let mut next_map = HashMap::new();
+        let false_edge = AigEdge::constant_edge(false);
+        next_map.insert(false_edge.node_id(), false_edge);
+        for l in self.latchs.iter() {
+            next_map.insert(l.input, l.next);
+        }
+        let mut ans = self.clone();
+        for i in self.nodes_range() {
+            if next_map.contains_key(&i) {
+                continue;
+            }
+            if self.nodes[i].is_and() {
+                let fanin0 = self.nodes[i].fanin0();
+                let fanin1 = self.nodes[i].fanin1();
+                let fanin0 = next_map[&fanin0.node_id()].not_if(fanin0.compl());
+                let fanin1 = next_map[&fanin1.node_id()].not_if(fanin1.compl());
+                let next = ans.new_and_node(fanin0, fanin1);
+                next_map.insert(i, next);
+            } else {
+                let next: AigEdge = ans.new_input_node().into();
+                next_map.insert(i, next);
+            }
+        }
+        for l in ans.latchs.iter_mut() {
+            l.next = next_map[&l.next.node_id()].not_if(l.next.compl());
+        }
+        for o in ans.outputs.iter_mut() {
+            *o = next_map[&o.node_id()].not_if(o.compl());
+        }
+        for b in ans.bads.iter_mut() {
+            *b = next_map[&b.node_id()].not_if(b.compl());
+        }
+        for b in 0..ans.constraints.len() {
+            let next = next_map[&ans.constraints[b].node_id()].not_if(ans.constraints[b].compl());
+            ans.constraints.push(next)
+        }
+        assert!(ans.inputs.len() == self.inputs.len() * 2);
+        assert!(ans.latchs.len() == self.latchs.len());
+        assert!(ans.outputs.len() == self.outputs.len());
+        assert!(ans.bads.len() == self.bads.len());
+        assert!(ans.constraints.len() == self.constraints.len() * 2);
+        ans
+    }
 }

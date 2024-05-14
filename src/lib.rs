@@ -3,6 +3,7 @@ mod cnf;
 mod display;
 mod logic_form;
 mod others;
+mod simplify;
 mod ternary;
 
 pub use crate::logic_form::*;

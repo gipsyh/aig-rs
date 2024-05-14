@@ -42,8 +42,9 @@ impl Display for Aig {
         for latch in &self.latchs {
             writeln!(
                 f,
-                "input: {}, next: {}{}",
+                "input: {}, init: {:?}, next: {}{}",
                 self.nodes[latch.input],
+                latch.init,
                 latch.next,
                 self.nodes[latch.next.node_id()]
             )?;

@@ -141,3 +141,23 @@ impl Aig {
         simulation
     }
 }
+
+impl Aig {
+    pub fn test(&self) {
+        let primary_inputs = vec![TernaryValue::X; self.inputs.len()];
+        let mut latch_inputs = Vec::new();
+        for l in self.latchs.iter() {
+            latch_inputs.push(match l.init {
+                Some(w) => TernaryValue::from(w),
+                None => TernaryValue::X,
+            });
+        }
+        let sim = self.ternary_simulate(&primary_inputs, &latch_inputs);
+        let mut ans = Vec::new();
+        for l in self.latchs.iter() {
+            ans.push(sim[l.next.node_id()]);
+        }
+        dbg!(ans);
+        todo!();
+    }
+}
