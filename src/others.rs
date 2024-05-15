@@ -132,8 +132,8 @@ impl Aig {
         for b in ans.bads.iter_mut() {
             *b = next_map[&b.node_id()].not_if(b.compl());
         }
-        for b in 0..ans.constraints.len() {
-            let next = next_map[&ans.constraints[b].node_id()].not_if(ans.constraints[b].compl());
+        for c in 0..ans.constraints.len() {
+            let next = next_map[&ans.constraints[c].node_id()].not_if(ans.constraints[c].compl());
             ans.constraints.push(next)
         }
         assert!(ans.inputs.len() == self.inputs.len() * 2);
