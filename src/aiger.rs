@@ -1,5 +1,7 @@
+use aiger::Symbol;
+
 use crate::{Aig, AigEdge, AigLatch, AigNode};
-use std::{io, path::Path};
+use std::{collections::HashMap, io, path::Path};
 
 impl Aig {
     fn setup_fanouts(&mut self) {
@@ -31,6 +33,8 @@ impl Aig {
         let mut outputs = Vec::new();
         let mut bads = Vec::new();
         let mut constraints = Vec::new();
+        let mut group: HashMap<String, u32> = HashMap::new();
+        let mut latch_group: HashMap<usize, u32> = HashMap::new();
         for obj in aiger.records() {
             let obj = obj.unwrap();
             match obj {
@@ -66,10 +70,26 @@ impl Aig {
                     ));
                 }
                 aiger::Aiger::Symbol {
-                    type_spec: _,
-                    position: _,
-                    symbol: _,
-                } => (),
+                    type_spec,
+                    position,
+                    symbol,
+                } => {
+                    if let Symbol::Latch = type_spec {
+                        let symbol = if symbol.ends_with(']') {
+                            let b = symbol.rfind('[').unwrap();
+                            symbol[0..b].to_string()
+                        } else {
+                            symbol
+                        };
+                        if let Some(g) = group.get(&symbol) {
+                            latch_group.insert(latchs[position].input, *g);
+                        } else {
+                            let g = group.len() as u32;
+                            group.insert(symbol, g);
+                            latch_group.insert(latchs[position].input, g);
+                        }
+                    }
+                }
             }
         }
         unsafe { nodes.set_len(header.i + header.l + header.a + 1) };
@@ -80,6 +100,7 @@ impl Aig {
             outputs,
             bads,
             constraints,
+            latch_group,
         };
         ret.setup_fanouts();
         Ok(ret)

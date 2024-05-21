@@ -9,6 +9,7 @@ mod ternary;
 pub use crate::logic_form::*;
 use ::logic_form::Lit;
 use std::{
+    collections::HashMap,
     mem::swap,
     ops::{Index, Not, Range},
     vec,
@@ -211,6 +212,7 @@ pub struct Aig {
     pub outputs: Vec<AigEdge>,
     pub bads: Vec<AigEdge>,
     pub constraints: Vec<AigEdge>,
+    pub latch_group: HashMap<usize, u32>,
 }
 
 impl Aig {
@@ -222,6 +224,7 @@ impl Aig {
             outputs: Vec::new(),
             bads: Vec::new(),
             constraints: Vec::new(),
+            latch_group: Default::default(),
         }
     }
 

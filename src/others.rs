@@ -92,6 +92,12 @@ impl Aig {
             .iter()
             .filter_map(|n| edge_map(*n))
             .collect();
+        let mut latch_group = HashMap::new();
+        for (l, g) in self.latch_group.iter() {
+            if let Some(newl) = refine_map.get(l) {
+                latch_group.insert(*newl, *g);
+            }
+        }
         Self {
             nodes,
             inputs,
@@ -99,6 +105,7 @@ impl Aig {
             outputs,
             bads,
             constraints,
+            latch_group,
         }
     }
 
