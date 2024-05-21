@@ -1,5 +1,8 @@
 use crate::{Aig, AigCube, AigEdge, AigNodeType};
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    mem::take,
+};
 
 impl Aig {
     pub fn latch_init_cube(&self) -> AigCube {
@@ -99,48 +102,74 @@ impl Aig {
         }
     }
 
-    pub fn unroll(&self) -> Aig {
-        let mut next_map = HashMap::new();
-        let false_edge = AigEdge::constant_edge(false);
-        next_map.insert(false_edge.node_id(), false_edge);
-        for l in self.latchs.iter() {
-            next_map.insert(l.input, l.next);
-        }
-        let mut ans = self.clone();
-        for i in self.nodes_range() {
-            if next_map.contains_key(&i) {
+    pub fn constraint_to_latch(&mut self) {
+        let constraints = take(&mut self.constraints);
+        let num_origin_latchs = self.latchs.len();
+        for c in constraints {
+            if c == AigEdge::constant_edge(true) {
                 continue;
             }
-            if self.nodes[i].is_and() {
-                let fanin0 = self.nodes[i].fanin0();
-                let fanin1 = self.nodes[i].fanin1();
-                let fanin0 = next_map[&fanin0.node_id()].not_if(fanin0.compl());
-                let fanin1 = next_map[&fanin1.node_id()].not_if(fanin1.compl());
-                let next = ans.new_and_node(fanin0, fanin1);
-                next_map.insert(i, next);
-            } else {
-                let next: AigEdge = ans.new_input_node().into();
-                next_map.insert(i, next);
+            let input = self.new_input_node();
+            let next = self.new_and_node(c, input.into());
+            self.new_latch(input, next, Some(true));
+        }
+        if self.latchs.len() > num_origin_latchs {
+            let mut c = self.latchs[num_origin_latchs].next;
+            for i in num_origin_latchs + 1..self.latchs.len() {
+                c = self.new_and_node(c, self.latchs[i].next);
             }
+            if self.bads.is_empty() {
+                self.outputs[0] = self.new_and_node(self.outputs[0], c);
+            } else {
+                self.bads[0] = self.new_and_node(self.bads[0], c);
+            };
         }
-        for l in ans.latchs.iter_mut() {
-            l.next = next_map[&l.next.node_id()].not_if(l.next.compl());
-        }
-        for o in ans.outputs.iter_mut() {
-            *o = next_map[&o.node_id()].not_if(o.compl());
-        }
-        for b in ans.bads.iter_mut() {
-            *b = next_map[&b.node_id()].not_if(b.compl());
-        }
-        for c in 0..ans.constraints.len() {
-            let next = next_map[&ans.constraints[c].node_id()].not_if(ans.constraints[c].compl());
-            ans.constraints.push(next)
-        }
-        assert!(ans.inputs.len() == self.inputs.len() * 2);
-        assert!(ans.latchs.len() == self.latchs.len());
-        assert!(ans.outputs.len() == self.outputs.len());
-        assert!(ans.bads.len() == self.bads.len());
-        assert!(ans.constraints.len() == self.constraints.len() * 2);
-        ans
     }
+
+    // pub fn unroll(&self) -> Aig {
+    //     let mut next_map = HashMap::new();
+    //     let false_edge = AigEdge::constant_edge(false);
+    //     next_map.insert(false_edge.node_id(), false_edge);
+    //     for l in self.latchs.iter() {
+    //         next_map.insert(l.input, l.next);
+    //     }
+    //     let mut ans = self.clone();
+    //     for i in self.nodes_range() {
+    //         if next_map.contains_key(&i) {
+    //             continue;
+    //         }
+    //         if self.nodes[i].is_and() {
+    //             let fanin0 = self.nodes[i].fanin0();
+    //             let fanin1 = self.nodes[i].fanin1();
+    //             let fanin0 = next_map[&fanin0.node_id()].not_if(fanin0.compl());
+    //             let fanin1 = next_map[&fanin1.node_id()].not_if(fanin1.compl());
+    //             let next = ans.new_and_node(fanin0, fanin1);
+    //             next_map.insert(i, next);
+    //         } else {
+    //             let input = ans.new_input_node();
+    //             ans.inputs.push(input);
+    //             let next: AigEdge = input.into();
+    //             next_map.insert(i, next);
+    //         }
+    //     }
+    //     for l in ans.latchs.iter_mut() {
+    //         l.next = next_map[&l.next.node_id()].not_if(l.next.compl());
+    //     }
+    //     for o in ans.outputs.iter_mut() {
+    //         *o = next_map[&o.node_id()].not_if(o.compl());
+    //     }
+    //     for b in ans.bads.iter_mut() {
+    //         *b = next_map[&b.node_id()].not_if(b.compl());
+    //     }
+    //     for c in 0..ans.constraints.len() {
+    //         let next = next_map[&ans.constraints[c].node_id()].not_if(ans.constraints[c].compl());
+    //         ans.constraints.push(next)
+    //     }
+    //     assert!(ans.inputs.len() == self.inputs.len() * 2);
+    //     assert!(ans.latchs.len() == self.latchs.len());
+    //     assert!(ans.outputs.len() == self.outputs.len());
+    //     assert!(ans.bads.len() == self.bads.len());
+    //     assert!(ans.constraints.len() == self.constraints.len() * 2);
+    //     ans
+    // }
 }

@@ -229,10 +229,8 @@ impl Aig {
         let nodeid = self.nodes.len();
         let input = AigNode::new_input(nodeid);
         self.nodes.push(input);
-        self.inputs.push(nodeid);
         nodeid
     }
-
     pub fn new_latch(&mut self, input: AigNodeId, next: AigEdge, init: Option<bool>) {
         self.latchs.push(AigLatch::new(input, next, init))
     }
