@@ -1,4 +1,4 @@
-use crate::{Aig, AigCube, AigEdge, AigNodeType};
+use crate::{Aig, AigCube, AigEdge, AigNodeId, AigNodeType};
 use std::{
     collections::{HashMap, HashSet},
     mem::take,
@@ -13,7 +13,7 @@ impl Aig {
         )
     }
 
-    pub fn coi_refine(&self, root: &[AigEdge]) -> Aig {
+    pub fn coi(&self, root: &[AigNodeId]) -> HashSet<AigNodeId> {
         let mut latchs = HashMap::new();
         for l in self.latchs.iter() {
             latchs.insert(l.input, *l);
@@ -22,9 +22,9 @@ impl Aig {
         refine.insert(AigEdge::constant_edge(true).node_id());
         let mut queue = Vec::new();
         for r in root {
-            if !refine.contains(&r.node_id()) {
-                queue.push(r.node_id());
-                refine.insert(r.node_id());
+            if !refine.contains(r) {
+                queue.push(*r);
+                refine.insert(*r);
             }
         }
         while let Some(n) = queue.pop() {
@@ -43,6 +43,19 @@ impl Aig {
                 refine_insert(l.next.node_id());
             }
         }
+        refine
+    }
+
+    pub fn coi_refine(&self) -> Aig {
+        let aig_bad = if self.bads.is_empty() {
+            self.outputs[0]
+        } else {
+            self.bads[0]
+        };
+        let mut refine_root: Vec<AigNodeId> =
+            self.constraints.iter().map(|c| c.node_id()).collect();
+        refine_root.push(aig_bad.node_id());
+        let refine = self.coi(&refine_root);
         let mut refine = Vec::from_iter(refine);
         refine.sort();
         let mut refine_map = HashMap::new();
