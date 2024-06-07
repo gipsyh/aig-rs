@@ -76,11 +76,6 @@ impl Aig {
                     *fanin0 = edge_map(*fanin0).unwrap();
                     *fanin1 = edge_map(*fanin1).unwrap();
                 }
-                new_node.fanouts = new_node
-                    .fanouts
-                    .iter()
-                    .filter_map(|n| edge_map(*n))
-                    .collect();
                 nodes.push(new_node);
             }
         }

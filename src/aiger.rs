@@ -4,22 +4,22 @@ use crate::{Aig, AigEdge, AigLatch, AigNode};
 use std::{collections::HashMap, io, path::Path};
 
 impl Aig {
-    fn setup_fanouts(&mut self) {
-        for id in self.nodes_range() {
-            if self.nodes[id].is_and() {
-                let fanin0 = self.nodes[id].fanin0();
-                let compl = fanin0.compl();
-                self.nodes[fanin0.node_id()]
-                    .fanouts
-                    .push(AigEdge::new(id, compl));
-                let fanin1 = self.nodes[id].fanin1();
-                let compl = fanin1.compl();
-                self.nodes[fanin1.node_id()]
-                    .fanouts
-                    .push(AigEdge::new(id, compl));
-            }
-        }
-    }
+    // fn setup_fanouts(&mut self) {
+    //     for id in self.nodes_range() {
+    //         if self.nodes[id].is_and() {
+    //             let fanin0 = self.nodes[id].fanin0();
+    //             let compl = fanin0.compl();
+    //             self.nodes[fanin0.node_id()]
+    //                 .fanouts
+    //                 .push(AigEdge::new(id, compl));
+    //             let fanin1 = self.nodes[id].fanin1();
+    //             let compl = fanin1.compl();
+    //             self.nodes[fanin1.node_id()]
+    //                 .fanouts
+    //                 .push(AigEdge::new(id, compl));
+    //         }
+    //     }
+    // }
 
     pub fn from_file<P: AsRef<Path>>(file: P) -> io::Result<Self> {
         let file = std::fs::File::open(file)?;
@@ -93,7 +93,7 @@ impl Aig {
             }
         }
         unsafe { nodes.set_len(header.i + header.l + header.a + 1) };
-        let mut ret = Self {
+        Ok(Self {
             nodes,
             inputs,
             latchs,
@@ -101,8 +101,6 @@ impl Aig {
             bads,
             constraints,
             latch_group,
-        };
-        ret.setup_fanouts();
-        Ok(ret)
+        })
     }
 }

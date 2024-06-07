@@ -4,6 +4,7 @@ mod display;
 mod logic_form;
 mod others;
 mod simplify;
+mod strash;
 mod ternary;
 
 pub use crate::logic_form::*;
@@ -126,7 +127,6 @@ pub enum AigNodeType {
 pub struct AigNode {
     id: AigNodeId,
     typ: AigNodeType,
-    pub fanouts: Vec<AigEdge>,
 }
 
 impl AigNode {
@@ -180,7 +180,6 @@ impl AigNode {
         Self {
             id,
             typ: AigNodeType::False,
-            fanouts: Vec::new(),
         }
     }
 
@@ -188,7 +187,6 @@ impl AigNode {
         Self {
             id,
             typ: AigNodeType::Input,
-            fanouts: Vec::new(),
         }
     }
 
@@ -199,7 +197,6 @@ impl AigNode {
         Self {
             id,
             typ: AigNodeType::And(fanin0, fanin1),
-            fanouts: Vec::new(),
         }
     }
 }
@@ -262,12 +259,6 @@ impl Aig {
             let nodeid = self.nodes.len();
             let and = AigNode::new_and(nodeid, fanin0, fanin1);
             self.nodes.push(and);
-            self.nodes[fanin0.id]
-                .fanouts
-                .push(AigEdge::new(nodeid, fanin0.compl()));
-            self.nodes[fanin1.id]
-                .fanouts
-                .push(AigEdge::new(nodeid, fanin1.compl()));
             nodeid.into()
         }
     }
@@ -310,18 +301,18 @@ impl Aig {
         flag
     }
 
-    pub fn fanout_logic_cone(&self, logic: AigEdge) -> Vec<bool> {
-        let mut flag = vec![false; self.num_nodes()];
-        flag[logic.node_id()] = true;
-        for id in self.nodes_range_with_false() {
-            if flag[id] {
-                for f in &self.nodes[id].fanouts {
-                    flag[f.node_id()] = true;
-                }
-            }
-        }
-        flag
-    }
+    // pub fn fanout_logic_cone(&self, logic: AigEdge) -> Vec<bool> {
+    //     let mut flag = vec![false; self.num_nodes()];
+    //     flag[logic.node_id()] = true;
+    //     for id in self.nodes_range_with_false() {
+    //         if flag[id] {
+    //             for f in &self.nodes[id].fanouts {
+    //                 flag[f.node_id()] = true;
+    //             }
+    //         }
+    //     }
+    //     flag
+    // }
 }
 
 impl Default for Aig {
