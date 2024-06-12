@@ -25,7 +25,7 @@ struct Aiger {
     num_fairness: u32,
 
     // [0..num_inputs[
-    inputs: *mut Lit,
+    inputs: *mut AigerSymbol,
     // [0..num_latches[
     latches: *mut AigerSymbol,
     // [0..num_outputs[
@@ -94,7 +94,7 @@ impl Aig {
         let inputs: Vec<AigNodeId> =
             unsafe { from_raw_parts(aiger.inputs, aiger.num_inputs as usize) }
                 .iter()
-                .map(|l| l.var().into())
+                .map(|l| l.lit.var().into())
                 .collect();
         let raw_latchs = unsafe { from_raw_parts(aiger.latches, aiger.num_latches as usize) };
         let mut latchs = Vec::new();
