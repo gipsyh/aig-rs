@@ -1,7 +1,63 @@
-use aiger::Symbol;
+use crate::{Aig, AigEdge, AigLatch, AigNode, AigNodeId};
+use libc::{fopen, FILE};
+use logic_form::Lit;
+use std::{
+    ffi::{c_char, CString},
+    os::raw::c_void,
+    slice::from_raw_parts,
+};
 
-use crate::{Aig, AigEdge, AigLatch, AigNode};
-use std::{collections::HashMap, io, path::Path};
+extern "C" {
+    fn aiger_init() -> *mut c_void;
+    fn aiger_read_from_file(aiger: *mut c_void, file: *mut FILE) -> *mut c_char;
+}
+
+#[repr(C)]
+struct Aiger {
+    maxvar: u32,
+    num_inputs: u32,
+    num_latches: u32,
+    num_outputs: u32,
+    num_ands: u32,
+    num_bad: u32,
+    num_constraints: u32,
+    num_justice: u32,
+    num_fairness: u32,
+
+    // [0..num_inputs[
+    inputs: *mut Lit,
+    // [0..num_latches[
+    latches: *mut AigerSymbol,
+    // [0..num_outputs[
+    outputs: *mut AigerSymbol,
+    // [0..num_bad[
+    bad: *mut AigerSymbol,
+    // [0..num_constraints[
+    constraints: *mut AigerSymbol,
+    // [0..num_justice[
+    justice: *mut AigerSymbol,
+    // [0..num_fairness[
+    fairness: *mut AigerSymbol,
+    ands: *mut AigerAnd,
+    comments: *mut *mut c_char,
+}
+
+#[repr(C)]
+struct AigerSymbol {
+    lit: Lit,
+    next: Lit,
+    reset: u32,
+    size: u32,
+    lits: *mut u32,
+    name: *mut c_char,
+}
+
+#[repr(C)]
+struct AigerAnd {
+    lhs: Lit,
+    rhs0: Lit,
+    rhs1: Lit,
+}
 
 impl Aig {
     // fn setup_fanouts(&mut self) {
@@ -21,86 +77,79 @@ impl Aig {
     //     }
     // }
 
-    pub fn from_file<P: AsRef<Path>>(file: P) -> io::Result<Self> {
-        let file = std::fs::File::open(file)?;
-        let aiger = aiger::Reader::from_reader(file).unwrap();
-        let header = aiger.header();
-        let mut nodes: Vec<AigNode> = Vec::with_capacity(header.i + header.l + header.a + 1);
+    pub fn from_file(file: &str) -> Self {
+        let file = CString::new(file).unwrap();
+        let mode = CString::new("r").unwrap();
+        let file = unsafe { fopen(file.as_ptr(), mode.as_ptr()) };
+        let aiger = unsafe { aiger_init() };
+        if !unsafe { aiger_read_from_file(aiger, file) }.is_null() {
+            println!("read aiger failed.");
+            panic!();
+        }
+        let aiger = unsafe { &mut *(aiger as *mut Aiger) };
+        let node_len = (aiger.num_inputs + aiger.num_latches + aiger.num_ands + 1) as usize;
+        let mut nodes: Vec<AigNode> = Vec::with_capacity(node_len);
         let nodes_remaining = nodes.spare_capacity_mut();
         nodes_remaining[0].write(AigNode::new_false(0));
-        let mut inputs = Vec::new();
+        let inputs: Vec<AigNodeId> =
+            unsafe { from_raw_parts(aiger.inputs, aiger.num_inputs as usize) }
+                .iter()
+                .map(|l| l.var().into())
+                .collect();
+        let raw_latchs = unsafe { from_raw_parts(aiger.latches, aiger.num_latches as usize) };
         let mut latchs = Vec::new();
-        let mut outputs = Vec::new();
-        let mut bads = Vec::new();
-        let mut constraints = Vec::new();
-        let mut group: HashMap<String, u32> = HashMap::new();
-        let mut latch_group: HashMap<usize, u32> = HashMap::new();
-        for obj in aiger.records() {
-            let obj = obj.unwrap();
-            match obj {
-                aiger::Aiger::Input(input) => {
-                    let id = input.0 / 2;
-                    nodes_remaining[id].write(AigNode::new_input(id));
-                    inputs.push(id);
-                }
-                aiger::Aiger::Latch {
-                    output,
-                    input,
-                    init,
-                } => {
-                    let id = output.0 / 2;
-                    nodes_remaining[id].write(AigNode::new_input(id));
-                    latchs.push(AigLatch::new(
-                        id,
-                        AigEdge::new(input.0 / 2, input.0 & 0x1 != 0),
-                        init,
-                    ));
-                }
-                aiger::Aiger::Output(o) => outputs.push(AigEdge::new(o.0 / 2, o.0 & 0x1 != 0)),
-                aiger::Aiger::BadState(b) => bads.push(AigEdge::new(b.0 / 2, b.0 & 0x1 != 0)),
-                aiger::Aiger::Constraint(c) => {
-                    constraints.push(AigEdge::new(c.0 / 2, c.0 & 0x1 != 0))
-                }
-                aiger::Aiger::AndGate { output, inputs } => {
-                    let id = output.0 / 2;
-                    nodes_remaining[id].write(AigNode::new_and(
-                        id,
-                        AigEdge::new(inputs[0].0 / 2, inputs[0].0 & 0x1 != 0),
-                        AigEdge::new(inputs[1].0 / 2, inputs[1].0 & 0x1 != 0),
-                    ));
-                }
-                aiger::Aiger::Symbol {
-                    type_spec,
-                    position,
-                    symbol,
-                } => {
-                    if let Symbol::Latch = type_spec {
-                        let symbol = if symbol.ends_with(']') {
-                            let b = symbol.rfind('[').unwrap();
-                            symbol[0..b].to_string()
-                        } else {
-                            symbol
-                        };
-                        if let Some(g) = group.get(&symbol) {
-                            latch_group.insert(latchs[position].input, *g);
-                        } else {
-                            let g = group.len() as u32;
-                            group.insert(symbol, g);
-                            latch_group.insert(latchs[position].input, g);
-                        }
-                    }
-                }
-            }
+        for l in raw_latchs.iter() {
+            let init = if l.reset <= 1 {
+                Some(l.reset != 0)
+            } else if l.reset == l.lit.into() {
+                None
+            } else {
+                panic!()
+            };
+            latchs.push(AigLatch::new(
+                l.lit.var().into(),
+                AigEdge::from_lit(l.next),
+                init,
+            ));
         }
-        unsafe { nodes.set_len(header.i + header.l + header.a + 1) };
-        Ok(Self {
+        let outputs: Vec<AigEdge> =
+            unsafe { from_raw_parts(aiger.outputs, aiger.num_outputs as usize) }
+                .iter()
+                .map(|l| AigEdge::from_lit(l.lit))
+                .collect();
+        let bads: Vec<AigEdge> = unsafe { from_raw_parts(aiger.bad, aiger.num_bad as usize) }
+            .iter()
+            .map(|l| AigEdge::from_lit(l.lit))
+            .collect();
+        let constraints: Vec<AigEdge> =
+            unsafe { from_raw_parts(aiger.constraints, aiger.num_constraints as usize) }
+                .iter()
+                .map(|l| AigEdge::from_lit(l.lit))
+                .collect();
+        for i in inputs.iter() {
+            nodes_remaining[*i].write(AigNode::new_input(*i));
+        }
+        for l in latchs.iter() {
+            nodes_remaining[l.input].write(AigNode::new_input(l.input));
+        }
+        let ands = unsafe { from_raw_parts(aiger.ands, aiger.num_ands as usize) };
+        for a in ands {
+            let id: usize = a.lhs.var().into();
+            nodes_remaining[id].write(AigNode::new_and(
+                id,
+                AigEdge::from_lit(a.rhs0),
+                AigEdge::from_lit(a.rhs1),
+            ));
+        }
+        unsafe { nodes.set_len(node_len) };
+        Self {
             nodes,
             inputs,
             latchs,
             outputs,
             bads,
             constraints,
-            latch_group,
-        })
+            latch_group: Default::default(),
+        }
     }
 }
