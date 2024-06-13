@@ -114,7 +114,6 @@ impl Aig {
             ));
         }
         let outputs: Vec<AigEdge> = (0..aiger.num_outputs)
-            .into_iter()
             .map(|i| unsafe { *aiger.outputs.add(i as usize) })
             .map(|l| AigEdge::from_lit(l.lit))
             .collect();
