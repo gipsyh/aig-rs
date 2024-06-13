@@ -43,6 +43,7 @@ struct Aiger {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 struct AigerSymbol {
     lit: Lit,
     next: Lit,
@@ -96,9 +97,9 @@ impl Aig {
                 .iter()
                 .map(|l| l.lit.var().into())
                 .collect();
-        let raw_latchs = unsafe { from_raw_parts(aiger.latches, aiger.num_latches as usize) };
         let mut latchs = Vec::new();
-        for l in raw_latchs.iter() {
+        for i in 0..aiger.num_latches {
+            let l = unsafe { &*aiger.latches.add(i as usize) };
             let init = if l.reset <= 1 {
                 Some(l.reset != 0)
             } else if l.reset == l.lit.into() {
@@ -112,11 +113,11 @@ impl Aig {
                 init,
             ));
         }
-        let outputs: Vec<AigEdge> =
-            unsafe { from_raw_parts(aiger.outputs, aiger.num_outputs as usize) }
-                .iter()
-                .map(|l| AigEdge::from_lit(l.lit))
-                .collect();
+        let outputs: Vec<AigEdge> = (0..aiger.num_outputs)
+            .into_iter()
+            .map(|i| unsafe { *aiger.outputs.add(i as usize) })
+            .map(|l| AigEdge::from_lit(l.lit))
+            .collect();
         let bads: Vec<AigEdge> = unsafe { from_raw_parts(aiger.bad, aiger.num_bad as usize) }
             .iter()
             .map(|l| AigEdge::from_lit(l.lit))
