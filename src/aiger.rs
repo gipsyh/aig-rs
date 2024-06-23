@@ -121,11 +121,10 @@ impl Aig {
             .iter()
             .map(|l| AigEdge::from_lit(l.lit))
             .collect();
-        let constraints: Vec<AigEdge> =
-            unsafe { from_raw_parts(aiger.constraints, aiger.num_constraints as usize) }
-                .iter()
-                .map(|l| AigEdge::from_lit(l.lit))
-                .collect();
+        let constraints: Vec<AigEdge> = (0..aiger.num_constraints)
+            .map(|i| unsafe { *aiger.constraints.add(i as usize) })
+            .map(|l| AigEdge::from_lit(l.lit))
+            .collect();
         for i in inputs.iter() {
             nodes_remaining[*i].write(AigNode::new_input(*i));
         }
