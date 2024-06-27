@@ -1,14 +1,14 @@
 use crate::{Aig, AigEdge};
-use logic_form::{Clause, Cnf, Lit};
+use logic_form::{Clause, Lit};
 use std::collections::{HashMap, HashSet};
 
 impl Aig {
-    pub fn get_cnf(&self, logic: &[AigEdge]) -> Cnf {
+    pub fn get_cnf(&self, logic: &[AigEdge]) -> Vec<Clause> {
         let mut refs = HashSet::new();
         for l in logic {
             refs.insert(l.node_id());
         }
-        let mut ans = Cnf::new();
+        let mut ans = Vec::new();
         ans.push(Clause::from([Lit::constant_lit(true)]));
         for i in self.nodes_range().rev() {
             let edge: AigEdge = self.nodes[i].node_id().into();
@@ -45,7 +45,7 @@ impl Aig {
         ans
     }
 
-    pub fn get_optimized_cnf(&self, logic: &[AigEdge]) -> Cnf {
+    pub fn get_optimized_cnf(&self, logic: &[AigEdge]) -> Vec<Clause> {
         let mut latchs = HashMap::new();
         for l in self.latchs.iter() {
             latchs.insert(l.input, *l);
@@ -58,7 +58,7 @@ impl Aig {
                 queue.push(*l);
             }
         }
-        let mut ans = Cnf::new();
+        let mut ans = Vec::new();
         while let Some(e) = queue.pop() {
             let i = e.node_id();
             let mut add_ref = |e: AigEdge| {
