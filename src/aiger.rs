@@ -92,11 +92,10 @@ impl Aig {
         let mut nodes: Vec<AigNode> = Vec::with_capacity(node_len);
         let nodes_remaining = nodes.spare_capacity_mut();
         nodes_remaining[0].write(AigNode::new_false(0));
-        let inputs: Vec<AigNodeId> =
-            unsafe { from_raw_parts(aiger.inputs, aiger.num_inputs as usize) }
-                .iter()
-                .map(|l| l.lit.var().into())
-                .collect();
+        let inputs: Vec<AigNodeId> = (0..aiger.num_inputs)
+            .map(|i| unsafe { *aiger.inputs.add(i as usize) })
+            .map(|l| l.lit.var().into())
+            .collect();
         let mut latchs = Vec::new();
         for i in 0..aiger.num_latches {
             let l = unsafe { &*aiger.latches.add(i as usize) };
