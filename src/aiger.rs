@@ -1,7 +1,8 @@
 use crate::{Aig, AigEdge, AigLatch, AigNode, AigNodeId};
-use libc::{fopen, FILE};
+use libc::{fopen, CS, FILE};
 use logic_form::Lit;
 use std::{
+    collections::HashMap,
     ffi::{c_char, CString},
     os::raw::c_void,
     slice::from_raw_parts,
@@ -97,8 +98,30 @@ impl Aig {
             .map(|l| l.lit.var().into())
             .collect();
         let mut latchs = Vec::new();
+        let mut group: HashMap<String, u32> = HashMap::new();
+        let mut latch_group: HashMap<usize, Option<u32>> = HashMap::new();
         for i in 0..aiger.num_latches {
             let l = unsafe { &*aiger.latches.add(i as usize) };
+            let gid = if !l.name.is_null() {
+                let symbol = unsafe { CString::from_raw(l.name) };
+                let symbol = symbol.into_string().unwrap();
+                let symbol = if symbol.ends_with(']') {
+                    let b = symbol.rfind('[').unwrap();
+                    symbol[0..b].to_string()
+                } else {
+                    symbol
+                };
+                if let Some(g) = group.get(&symbol) {
+                    Some(*g)
+                } else {
+                    let g = group.len() as u32;
+                    group.insert(symbol, g);
+                    Some(g)
+                }
+            } else {
+                None
+            };
+            latch_group.insert(l.lit.var().into(), gid);
             let init = if l.reset <= 1 {
                 Some(l.reset != 0)
             } else if l.reset == l.lit.into() {
