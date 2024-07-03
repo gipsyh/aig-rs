@@ -1,5 +1,5 @@
 use crate::{Aig, AigEdge, AigLatch, AigNode, AigNodeId};
-use libc::{fopen, CS, FILE};
+use libc::{fopen, FILE};
 use logic_form::Lit;
 use std::{
     collections::HashMap,
