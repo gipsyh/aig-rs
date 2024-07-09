@@ -268,8 +268,8 @@ impl Aig {
         !self.new_and_node(!fanin0, !fanin1)
     }
 
-    pub fn new_ands_node(&mut self, mut fanin: impl Iterator<Item = AigEdge>) -> AigEdge {
-        let mut res = fanin.next().unwrap();
+    pub fn new_ands_node(&mut self, fanin: impl Iterator<Item = AigEdge>) -> AigEdge {
+        let mut res = AigEdge::constant_edge(true);
         for f in fanin {
             res = self.new_and_node(res, f);
         }
