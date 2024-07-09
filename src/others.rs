@@ -46,7 +46,7 @@ impl Aig {
         refine
     }
 
-    pub fn coi_refine(&self) -> Aig {
+    pub fn coi_refine(&self) -> (Aig, HashMap<AigNodeId, AigNodeId>) {
         let aig_bad = if self.bads.is_empty() {
             self.outputs[0]
         } else {
@@ -68,8 +68,10 @@ impl Aig {
                 .map(|new_id| AigEdge::new(*new_id, e.complement))
         };
         let mut nodes = Vec::new();
+        let mut remap = HashMap::new();
         for n in self.nodes.iter() {
             if let Some(new_id) = refine_map.get(&n.node_id()) {
+                remap.insert(*new_id, n.node_id());
                 let mut new_node = n.clone();
                 new_node.id = *new_id;
                 if let AigNodeType::And(fanin0, fanin1) = &mut new_node.typ {
@@ -106,15 +108,18 @@ impl Aig {
                 latch_group.insert(*newl, *g);
             }
         }
-        Self {
-            nodes,
-            inputs,
-            latchs,
-            outputs,
-            bads,
-            constraints,
-            latch_group,
-        }
+        (
+            Self {
+                nodes,
+                inputs,
+                latchs,
+                outputs,
+                bads,
+                constraints,
+                latch_group,
+            },
+            remap,
+        )
     }
 
     pub fn constraint_to_latch(&mut self) {
