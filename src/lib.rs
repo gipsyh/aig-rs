@@ -267,6 +267,18 @@ impl Aig {
     pub fn new_or_node(&mut self, fanin0: AigEdge, fanin1: AigEdge) -> AigEdge {
         !self.new_and_node(!fanin0, !fanin1)
     }
+
+    pub fn new_ands_node(&mut self, mut fanin: impl Iterator<Item = AigEdge>) -> AigEdge {
+        let mut res = fanin.next().unwrap();
+        for f in fanin {
+            res = self.new_and_node(res, f);
+        }
+        res
+    }
+
+    pub fn new_ors_node(&mut self, fanin: impl Iterator<Item = AigEdge>) -> AigEdge {
+        !self.new_ands_node(fanin.map(|e| !e))
+    }
 }
 
 impl Aig {
