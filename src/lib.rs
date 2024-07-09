@@ -231,6 +231,7 @@ impl Aig {
         self.nodes.push(input);
         nodeid
     }
+
     pub fn new_latch(&mut self, input: AigNodeId, next: AigEdge, init: Option<bool>) {
         self.latchs.push(AigLatch::new(input, next, init))
     }
