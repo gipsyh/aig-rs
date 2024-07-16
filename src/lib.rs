@@ -17,11 +17,9 @@ use std::{
 };
 pub use ternary::*;
 
-pub type AigNodeId = usize;
-
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct AigEdge {
-    id: AigNodeId,
+    id: usize,
     complement: bool,
 }
 
@@ -34,8 +32,8 @@ impl Not for AigEdge {
     }
 }
 
-impl From<AigNodeId> for AigEdge {
-    fn from(value: AigNodeId) -> Self {
+impl From<usize> for AigEdge {
+    fn from(value: usize) -> Self {
         Self {
             id: value,
             complement: false,
@@ -56,11 +54,11 @@ impl Ord for AigEdge {
 }
 
 impl AigEdge {
-    pub fn new(id: AigNodeId, complement: bool) -> Self {
+    pub fn new(id: usize, complement: bool) -> Self {
         Self { id, complement }
     }
 
-    pub fn node_id(&self) -> AigNodeId {
+    pub fn node_id(&self) -> usize {
         self.id
     }
 
@@ -68,7 +66,7 @@ impl AigEdge {
         self.complement
     }
 
-    pub fn set_nodeid(&mut self, nodeid: AigNodeId) {
+    pub fn set_nodeid(&mut self, nodeid: usize) {
         self.id = nodeid;
     }
 
@@ -105,13 +103,13 @@ impl AigEdge {
 
 #[derive(Debug, Clone, Copy)]
 pub struct AigLatch {
-    pub input: AigNodeId,
+    pub input: usize,
     pub next: AigEdge,
     pub init: Option<bool>,
 }
 
 impl AigLatch {
-    pub fn new(input: AigNodeId, next: AigEdge, init: Option<bool>) -> Self {
+    pub fn new(input: usize, next: AigEdge, init: Option<bool>) -> Self {
         Self { input, next, init }
     }
 }
@@ -125,12 +123,12 @@ pub enum AigNodeType {
 
 #[derive(Debug, Clone)]
 pub struct AigNode {
-    id: AigNodeId,
+    id: usize,
     typ: AigNodeType,
 }
 
 impl AigNode {
-    pub fn node_id(&self) -> AigNodeId {
+    pub fn node_id(&self) -> usize {
         self.id
     }
 
@@ -190,7 +188,7 @@ impl AigNode {
 #[derive(Debug, Clone)]
 pub struct Aig {
     pub nodes: Vec<AigNode>,
-    pub inputs: Vec<AigNodeId>,
+    pub inputs: Vec<usize>,
     pub latchs: Vec<AigLatch>,
     pub outputs: Vec<AigEdge>,
     pub bads: Vec<AigEdge>,
@@ -214,7 +212,7 @@ impl Aig {
         }
     }
 
-    pub fn new_leaf_node(&mut self) -> AigNodeId {
+    pub fn new_leaf_node(&mut self) -> usize {
         let id = self.nodes.len();
         let leaf = AigNode {
             id,
@@ -224,7 +222,11 @@ impl Aig {
         id
     }
 
-    pub fn new_latch(&mut self, input: AigNodeId, next: AigEdge, init: Option<bool>) {
+    pub fn new_input(&mut self, input: usize) {
+        self.inputs.push(input)
+    }
+
+    pub fn new_latch(&mut self, input: usize, next: AigEdge, init: Option<bool>) {
         self.latchs.push(AigLatch::new(input, next, init))
     }
 
@@ -326,10 +328,10 @@ impl Default for Aig {
     }
 }
 
-impl Index<AigNodeId> for Aig {
+impl Index<usize> for Aig {
     type Output = AigNode;
 
-    fn index(&self, index: AigNodeId) -> &Self::Output {
+    fn index(&self, index: usize) -> &Self::Output {
         &self.nodes[index]
     }
 }

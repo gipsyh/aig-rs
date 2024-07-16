@@ -1,4 +1,4 @@
-use crate::{Aig, AigCube, AigEdge, AigNodeId, AigNodeType};
+use crate::{Aig, AigCube, AigEdge, AigNodeType};
 use std::collections::{HashMap, HashSet};
 
 impl Aig {
@@ -10,7 +10,7 @@ impl Aig {
         )
     }
 
-    pub fn coi(&self, root: &[AigNodeId]) -> HashSet<AigNodeId> {
+    pub fn coi(&self, root: &[usize]) -> HashSet<usize> {
         let mut latchs = HashMap::new();
         for l in self.latchs.iter() {
             latchs.insert(l.input, *l);
@@ -43,14 +43,13 @@ impl Aig {
         refine
     }
 
-    pub fn coi_refine(&self) -> (Aig, HashMap<AigNodeId, AigNodeId>) {
+    pub fn coi_refine(&self) -> (Aig, HashMap<usize, usize>) {
         let aig_bad = if self.bads.is_empty() {
             self.outputs[0]
         } else {
             self.bads[0]
         };
-        let mut refine_root: Vec<AigNodeId> =
-            self.constraints.iter().map(|c| c.node_id()).collect();
+        let mut refine_root: Vec<usize> = self.constraints.iter().map(|c| c.node_id()).collect();
         refine_root.push(aig_bad.node_id());
         let refine = self.coi(&refine_root);
         let mut refine = Vec::from_iter(refine);

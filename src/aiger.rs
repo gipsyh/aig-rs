@@ -1,4 +1,4 @@
-use crate::{Aig, AigEdge, AigLatch, AigNode, AigNodeId};
+use crate::{Aig, AigEdge, AigLatch, AigNode};
 use libc::{fopen, FILE};
 use logic_form::Lit;
 use std::{
@@ -107,7 +107,7 @@ impl Aig {
             id: 0,
             typ: crate::AigNodeType::False,
         });
-        let inputs: Vec<AigNodeId> = (0..aiger.num_inputs)
+        let inputs: Vec<usize> = (0..aiger.num_inputs)
             .map(|i| unsafe { *aiger.inputs.add(i as usize) })
             .map(|l| l.lit.var().into())
             .collect();
