@@ -103,7 +103,10 @@ impl Aig {
         let node_len = (aiger.num_inputs + aiger.num_latches + aiger.num_ands + 1) as usize;
         let mut nodes: Vec<AigNode> = Vec::with_capacity(node_len);
         let nodes_remaining = nodes.spare_capacity_mut();
-        nodes_remaining[0].write(AigNode::new_false(0));
+        nodes_remaining[0].write(AigNode {
+            id: 0,
+            typ: crate::AigNodeType::False,
+        });
         let inputs: Vec<AigNodeId> = (0..aiger.num_inputs)
             .map(|i| unsafe { *aiger.inputs.add(i as usize) })
             .map(|l| l.lit.var().into())
@@ -156,10 +159,16 @@ impl Aig {
             .map(|l| AigEdge::from_lit(l.lit))
             .collect();
         for i in inputs.iter() {
-            nodes_remaining[*i].write(AigNode::new_input(*i));
+            nodes_remaining[*i].write(AigNode {
+                id: *i,
+                typ: crate::AigNodeType::Leaf,
+            });
         }
         for l in latchs.iter() {
-            nodes_remaining[l.input].write(AigNode::new_input(l.input));
+            nodes_remaining[l.input].write(AigNode {
+                id: l.input,
+                typ: crate::AigNodeType::Leaf,
+            });
         }
         for i in 0..aiger.num_ands {
             let a = unsafe { &*aiger.ands.add(i as usize) };

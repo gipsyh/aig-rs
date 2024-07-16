@@ -1,8 +1,5 @@
 use crate::{Aig, AigCube, AigEdge, AigNodeId, AigNodeType};
-use std::{
-    collections::{HashMap, HashSet},
-    mem::take,
-};
+use std::collections::{HashMap, HashSet};
 
 impl Aig {
     pub fn latch_init_cube(&self) -> AigCube {
@@ -122,29 +119,29 @@ impl Aig {
         )
     }
 
-    pub fn constraint_to_latch(&mut self) {
-        let constraints = take(&mut self.constraints);
-        let num_origin_latchs = self.latchs.len();
-        for c in constraints {
-            if c == AigEdge::constant_edge(true) {
-                continue;
-            }
-            let input = self.new_input_node();
-            let next = self.new_and_node(c, input.into());
-            self.new_latch(input, next, Some(true));
-        }
-        if self.latchs.len() > num_origin_latchs {
-            let mut c = self.latchs[num_origin_latchs].next;
-            for i in num_origin_latchs + 1..self.latchs.len() {
-                c = self.new_and_node(c, self.latchs[i].next);
-            }
-            if self.bads.is_empty() {
-                self.outputs[0] = self.new_and_node(self.outputs[0], c);
-            } else {
-                self.bads[0] = self.new_and_node(self.bads[0], c);
-            };
-        }
-    }
+    // pub fn constraint_to_latch(&mut self) {
+    //     let constraints = take(&mut self.constraints);
+    //     let num_origin_latchs = self.latchs.len();
+    //     for c in constraints {
+    //         if c == AigEdge::constant_edge(true) {
+    //             continue;
+    //         }
+    //         let input = self.new_input_node();
+    //         let next = self.new_and_node(c, input.into());
+    //         self.new_latch(input, next, Some(true));
+    //     }
+    //     if self.latchs.len() > num_origin_latchs {
+    //         let mut c = self.latchs[num_origin_latchs].next;
+    //         for i in num_origin_latchs + 1..self.latchs.len() {
+    //             c = self.new_and_node(c, self.latchs[i].next);
+    //         }
+    //         if self.bads.is_empty() {
+    //             self.outputs[0] = self.new_and_node(self.outputs[0], c);
+    //         } else {
+    //             self.bads[0] = self.new_and_node(self.bads[0], c);
+    //         };
+    //     }
+    // }
 
     // pub fn unroll(&self) -> Aig {
     //     let mut next_map = HashMap::new();

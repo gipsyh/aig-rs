@@ -5,7 +5,7 @@ impl Display for AigNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.typ {
             AigNodeType::False => write!(f, "False"),
-            AigNodeType::Input => write!(f, "I{}", self.id),
+            AigNodeType::Leaf => write!(f, "I{}", self.id),
             AigNodeType::And(_, _) => write!(f, "A{}", self.id),
         }
     }

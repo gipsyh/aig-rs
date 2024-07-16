@@ -119,7 +119,7 @@ impl AigLatch {
 #[derive(Debug, Clone)]
 pub enum AigNodeType {
     False,
-    Input,
+    Leaf,
     And(AigEdge, AigEdge),
 }
 
@@ -138,8 +138,8 @@ impl AigNode {
         matches!(self.typ, AigNodeType::And(_, _))
     }
 
-    pub fn is_input(&self) -> bool {
-        matches!(self.typ, AigNodeType::Input)
+    pub fn is_leaf(&self) -> bool {
+        matches!(self.typ, AigNodeType::Leaf)
     }
 
     pub fn fanin0(&self) -> AigEdge {
@@ -176,20 +176,6 @@ impl AigNode {
 }
 
 impl AigNode {
-    fn new_false(id: usize) -> Self {
-        Self {
-            id,
-            typ: AigNodeType::False,
-        }
-    }
-
-    fn new_input(id: usize) -> Self {
-        Self {
-            id,
-            typ: AigNodeType::Input,
-        }
-    }
-
     fn new_and(id: usize, mut fanin0: AigEdge, mut fanin1: AigEdge) -> Self {
         if fanin0.node_id() > fanin1.node_id() {
             swap(&mut fanin0, &mut fanin1);
@@ -215,7 +201,10 @@ pub struct Aig {
 impl Aig {
     pub fn new() -> Self {
         Self {
-            nodes: vec![AigNode::new_false(0)],
+            nodes: vec![AigNode {
+                id: 0,
+                typ: AigNodeType::False,
+            }],
             inputs: Vec::new(),
             latchs: Vec::new(),
             outputs: Vec::new(),
@@ -225,11 +214,14 @@ impl Aig {
         }
     }
 
-    pub fn new_input_node(&mut self) -> AigNodeId {
-        let nodeid = self.nodes.len();
-        let input = AigNode::new_input(nodeid);
-        self.nodes.push(input);
-        nodeid
+    pub fn new_leaf_node(&mut self) -> AigNodeId {
+        let id = self.nodes.len();
+        let leaf = AigNode {
+            id,
+            typ: AigNodeType::Leaf,
+        };
+        self.nodes.push(leaf);
+        id
     }
 
     pub fn new_latch(&mut self, input: AigNodeId, next: AigEdge, init: Option<bool>) {
