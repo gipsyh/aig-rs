@@ -156,6 +156,13 @@ impl AigNode {
         }
     }
 
+    pub fn fanin(&self) -> (AigEdge, AigEdge) {
+        let AigNodeType::And(fanin0, fanin1) = self.typ else {
+            panic!();
+        };
+        (fanin0, fanin1)
+    }
+
     pub fn set_fanin0(&mut self, fanin: AigEdge) {
         if let AigNodeType::And(fanin0, _) = &mut self.typ {
             *fanin0 = fanin
