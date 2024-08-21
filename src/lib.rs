@@ -10,7 +10,6 @@ mod ternary;
 pub use crate::logic_form::*;
 use ::logic_form::Lit;
 use std::{
-    collections::HashMap,
     mem::swap,
     ops::{Index, Not, Range},
     vec,
@@ -99,6 +98,17 @@ impl AigEdge {
     pub fn to_lit(&self) -> Lit {
         Lit::new(self.id.into(), !self.complement)
     }
+
+    #[inline]
+    pub fn map<M>(&self, map: &M) -> Self
+    where
+        M: Fn(usize) -> usize,
+    {
+        Self {
+            id: map(self.id),
+            complement: self.complement,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -178,6 +188,20 @@ impl AigNode {
             panic!();
         }
     }
+
+    #[inline]
+    pub fn map<M>(&self, map: &M) -> Self
+    where
+        M: Fn(usize) -> usize,
+    {
+        let mut res = self.clone();
+        res.id = map(res.id);
+        if let AigNodeType::And(fanin0, fanin1) = &mut res.typ {
+            *fanin0 = fanin0.map(map);
+            *fanin1 = fanin1.map(map);
+        }
+        res
+    }
 }
 
 impl AigNode {
@@ -200,7 +224,6 @@ pub struct Aig {
     pub outputs: Vec<AigEdge>,
     pub bads: Vec<AigEdge>,
     pub constraints: Vec<AigEdge>,
-    pub latch_group: HashMap<usize, u32>,
 }
 
 impl Aig {
@@ -215,7 +238,6 @@ impl Aig {
             outputs: Vec::new(),
             bads: Vec::new(),
             constraints: Vec::new(),
-            latch_group: Default::default(),
         }
     }
 

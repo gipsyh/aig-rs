@@ -188,7 +188,6 @@ impl Aig {
             outputs,
             bads,
             constraints,
-            latch_group,
         }
     }
 

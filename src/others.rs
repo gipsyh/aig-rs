@@ -98,12 +98,6 @@ impl Aig {
             .iter()
             .filter_map(|n| edge_map(*n))
             .collect();
-        let mut latch_group = HashMap::new();
-        for (l, g) in self.latch_group.iter() {
-            if let Some(newl) = refine_map.get(l) {
-                latch_group.insert(*newl, *g);
-            }
-        }
         (
             Self {
                 nodes,
@@ -112,7 +106,6 @@ impl Aig {
                 outputs,
                 bads,
                 constraints,
-                latch_group,
             },
             remap,
         )
@@ -188,4 +181,45 @@ impl Aig {
     //     assert!(ans.constraints.len() == self.constraints.len() * 2);
     //     ans
     // }
+
+    pub fn merge(&mut self, other: &Aig) {
+        let offset = self.num_nodes() - 1;
+        let map = |x: usize| {
+            if x == 0 {
+                x
+            } else {
+                x + offset
+            }
+        };
+        for i in 1..other.num_nodes() {
+            let n = other.nodes[i].map(&map);
+            self.nodes.push(n);
+        }
+        for i in other.inputs.iter() {
+            self.inputs.push(*i + offset);
+        }
+        for l in other.latchs.iter() {
+            let mut l = l.clone();
+            l.input += offset;
+            l.next = l.next.map(&map);
+            self.latchs.push(l);
+        }
+        for l in other.outputs.iter() {
+            self.outputs.push(l.map(&map));
+        }
+        for l in other.bads.iter() {
+            self.bads.push(l.map(&map));
+        }
+        for l in other.constraints.iter() {
+            self.constraints.push(l.map(&map));
+        }
+    }
+
+    pub fn unroll_to(&self, k: usize) -> Aig {
+        let mut res = self.clone();
+        for _ in 0..k {
+            res.merge(self);
+        }
+        res
+    }
 }
