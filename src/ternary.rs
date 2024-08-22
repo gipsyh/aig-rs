@@ -1,5 +1,8 @@
 use crate::Aig;
-use std::ops::{BitAnd, BitOr, Not};
+use std::{
+    fmt::{self, write, Display, Formatter},
+    ops::{BitAnd, BitOr, Not},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TernaryValue {
@@ -89,7 +92,18 @@ impl From<char> for TernaryValue {
             '1' => Self::True,
             '0' => Self::False,
             'x' => Self::X,
+            'X' => Self::X,
             _ => panic!(),
+        }
+    }
+}
+
+impl Display for TernaryValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            TernaryValue::True => '1'.fmt(f),
+            TernaryValue::False => '0'.fmt(f),
+            TernaryValue::X => 'X'.fmt(f),
         }
     }
 }
