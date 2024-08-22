@@ -53,26 +53,32 @@ impl Ord for AigEdge {
 }
 
 impl AigEdge {
+    #[inline]
     pub fn new(id: usize, complement: bool) -> Self {
         Self { id, complement }
     }
 
+    #[inline]
     pub fn node_id(&self) -> usize {
         self.id
     }
 
+    #[inline]
     pub fn compl(&self) -> bool {
         self.complement
     }
 
+    #[inline]
     pub fn set_nodeid(&mut self, nodeid: usize) {
         self.id = nodeid;
     }
 
+    #[inline]
     pub fn set_compl(&mut self, compl: bool) {
         self.complement = compl
     }
 
+    #[inline]
     pub fn not_if(self, x: bool) -> Self {
         if x {
             !self
@@ -81,6 +87,7 @@ impl AigEdge {
         }
     }
 
+    #[inline]
     pub fn constant_edge(polarity: bool) -> Self {
         AigEdge {
             id: 0,
@@ -88,6 +95,7 @@ impl AigEdge {
         }
     }
 
+    #[inline]
     pub fn from_lit(lit: Lit) -> Self {
         Self {
             id: lit.var().into(),
@@ -95,6 +103,7 @@ impl AigEdge {
         }
     }
 
+    #[inline]
     pub fn to_lit(&self) -> Lit {
         Lit::new(self.id.into(), !self.complement)
     }

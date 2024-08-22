@@ -1,5 +1,5 @@
 use crate::{Aig, AigEdge, AigLatch, AigNode};
-use libc::{fopen, FILE};
+use libc::{fclose, fopen, FILE};
 use logic_form::Lit;
 use std::{
     collections::HashMap,
@@ -19,7 +19,7 @@ extern "C" {
     fn aiger_add_constraint(aiger: *mut c_void, lit: u32, s: *const c_char);
     fn aiger_add_and(aiger: *mut c_void, lhs: u32, rhs0: u32, rhs1: u32);
     fn aiger_add_reset(aiger: *mut c_void, lit: u32, reset: u32);
-    fn aiger_open_and_write_to_file(aiger: *mut c_void, file: *const c_char) -> i32;
+    fn aiger_write_to_file(aiger: *mut c_void, mode: i32, file: *mut FILE) -> i32;
 }
 
 #[repr(C)]
@@ -99,6 +99,7 @@ impl Aig {
         if !unsafe { aiger_read_from_file(aiger, file) }.is_null() {
             panic!("error: read {f} failed.");
         }
+        unsafe { fclose(file) };
         let aiger = unsafe { &mut *(aiger as *mut Aiger) };
         let node_len = (aiger.num_inputs + aiger.num_latches + aiger.num_ands + 1) as usize;
         let mut nodes: Vec<AigNode> = Vec::with_capacity(node_len);
@@ -191,7 +192,7 @@ impl Aig {
         }
     }
 
-    pub fn to_file(&self, f: &str) {
+    pub fn to_file(&self, f: &str, ascii: bool) {
         let aiger = unsafe { aiger_init() };
         for i in self.nodes_range() {
             if self.nodes[i].is_and() {
@@ -236,7 +237,14 @@ impl Aig {
             unsafe { aiger_add_constraint(aiger, l.to_lit().into(), null() as _) };
         }
         let file = CString::new(f).unwrap();
-        let res = unsafe { aiger_open_and_write_to_file(aiger, file.as_ptr()) };
+        let mode = CString::new("w").unwrap();
+        let file = unsafe { fopen(file.as_ptr(), mode.as_ptr()) };
+        if file.is_null() {
+            panic!("error: create {f} failed.");
+        }
+        let mode = if ascii { 1 } else { 0 };
+        let res = unsafe { aiger_write_to_file(aiger, mode, file) };
         assert!(res > 0, "write aig to {f} failed");
+        unsafe { fclose(file) };
     }
 }
