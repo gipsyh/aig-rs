@@ -82,6 +82,18 @@ impl From<bool> for TernaryValue {
     }
 }
 
+impl From<char> for TernaryValue {
+    #[inline]
+    fn from(value: char) -> Self {
+        match value {
+            '1' => Self::True,
+            '0' => Self::False,
+            'x' => Self::X,
+            _ => panic!(),
+        }
+    }
+}
+
 impl Aig {
     pub fn ternary_simulate(
         &self,
