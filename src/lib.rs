@@ -96,6 +96,11 @@ impl AigEdge {
     }
 
     #[inline]
+    pub fn is_constant(&self, polarity: bool) -> bool {
+        *self == Self::constant_edge(polarity)
+    }
+
+    #[inline]
     pub fn from_lit(lit: Lit) -> Self {
         Self {
             id: lit.var().into(),
