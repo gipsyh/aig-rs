@@ -168,8 +168,8 @@ impl Aig {
             }
         }
         let edge_map = |e: AigEdge| next_map[&e.node_id()].not_if(e.compl());
-        for l in self.latchs.iter_mut() {
-            l.next = edge_map(l.next);
+        for (f, s) in from.latchs.iter().zip(self.latchs.iter_mut()) {
+            s.next = edge_map(f.next);
         }
         for o in from.outputs.clone() {
             self.outputs.push(edge_map(o));
