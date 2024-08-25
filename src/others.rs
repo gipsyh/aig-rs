@@ -142,57 +142,50 @@ impl Aig {
     //     }
     // }
 
-    pub fn unroll(&self) -> Aig {
+    pub fn unroll(&mut self, from: &Aig) {
         let mut next_map = HashMap::new();
         let false_edge = AigEdge::constant_edge(false);
         next_map.insert(false_edge.node_id(), false_edge);
         for l in self.latchs.iter() {
             next_map.insert(l.input, l.next);
         }
-        let mut ans = self.clone();
-        for i in self.nodes_range() {
+        for i in from.nodes_range() {
             if next_map.contains_key(&i) {
                 continue;
             }
-            if self.nodes[i].is_and() {
+            if from.nodes[i].is_and() {
                 let fanin0 = self.nodes[i].fanin0();
                 let fanin1 = self.nodes[i].fanin1();
                 let fanin0 = next_map[&fanin0.node_id()].not_if(fanin0.compl());
                 let fanin1 = next_map[&fanin1.node_id()].not_if(fanin1.compl());
-                let next = ans.new_and_node(fanin0, fanin1);
+                let next = self.new_and_node(fanin0, fanin1);
                 next_map.insert(i, next);
             } else {
-                let input = ans.new_leaf_node();
-                ans.inputs.push(input);
+                let input = self.new_leaf_node();
+                self.inputs.push(input);
                 let next: AigEdge = input.into();
                 next_map.insert(i, next);
             }
         }
         let edge_map = |e: AigEdge| next_map[&e.node_id()].not_if(e.compl());
-        // for l in ans.latchs.iter_mut() {
-        //     l.next = next_map[&l.next.node_id()].not_if(l.next.compl());
-        // }
-        // for o in ans.outputs.clone() {
-        //     ans.outputs.push(edge_map(o));
-        // }
-        // for b in ans.bads.clone() {
-        //     ans.bads.push(edge_map(b));
-        // }
-        // for c in ans.constraints.clone() {
-        //     ans.constraints.push(edge_map(c));
-        // }
-        assert!(ans.inputs.len() == self.inputs.len() * 2);
-        assert!(ans.latchs.len() == self.latchs.len());
-        // assert!(ans.outputs.len() == self.outputs.len() * 2);
-        // assert!(ans.bads.len() == self.bads.len() * 2);
-        // assert!(ans.constraints.len() == self.constraints.len() * 2);
-        ans
+        for l in self.latchs.iter_mut() {
+            l.next = edge_map(l.next);
+        }
+        for o in from.outputs.clone() {
+            self.outputs.push(edge_map(o));
+        }
+        for b in from.bads.clone() {
+            self.bads.push(edge_map(b));
+        }
+        for c in from.constraints.clone() {
+            self.constraints.push(edge_map(c));
+        }
     }
 
     pub fn unroll_to(&self, k: usize) -> Aig {
         let mut res = self.clone();
         for _ in 0..k {
-            res.merge(self);
+            res.unroll(self);
         }
         res
     }
@@ -271,6 +264,11 @@ impl Aig {
         res.outputs = self.outputs.iter().map(|e| edge_map(*e)).collect();
         res.bads = self.bads.iter().map(|e| edge_map(*e)).collect();
         res.constraints = self.constraints.iter().map(|e| edge_map(*e)).collect();
+        res.symbols = self
+            .symbols
+            .iter()
+            .map(|(id, s)| (encode_map[id], s.clone()))
+            .collect();
         assert!(res.nodes.len() == self.nodes.len());
         res
     }
