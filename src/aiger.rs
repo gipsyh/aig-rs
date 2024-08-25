@@ -108,31 +108,27 @@ impl Aig {
             id: 0,
             typ: crate::AigNodeType::False,
         });
+        let mut symbols = HashMap::new();
         let inputs: Vec<usize> = (0..aiger.num_inputs)
             .map(|i| unsafe { *aiger.inputs.add(i as usize) })
-            .map(|l| l.lit.var().into())
+            .map(|l| {
+                let id: usize = l.lit.var().into();
+                if !l.name.is_null() {
+                    let symbol = unsafe { CStr::from_ptr(l.name) };
+                    let symbol = symbol.to_str().unwrap();
+                    symbols.insert(id, symbol.to_string());
+                }
+                id
+            })
             .collect();
         let mut latchs = Vec::new();
-        let mut group: HashMap<String, u32> = HashMap::new();
-        let mut latch_group: HashMap<usize, u32> = HashMap::new();
         for i in 0..aiger.num_latches {
             let l = unsafe { &*aiger.latches.add(i as usize) };
+            let id: usize = l.lit.var().into();
             if !l.name.is_null() {
                 let symbol = unsafe { CStr::from_ptr(l.name) };
                 let symbol = symbol.to_str().unwrap();
-                let symbol = if symbol.ends_with(']') {
-                    let b = symbol.rfind('[').unwrap();
-                    symbol[0..b].to_string()
-                } else {
-                    symbol.to_string()
-                };
-                if let Some(g) = group.get(&symbol) {
-                    latch_group.insert(l.lit.var().into(), *g);
-                } else {
-                    let g = group.len() as u32;
-                    group.insert(symbol, g);
-                    latch_group.insert(l.lit.var().into(), g);
-                }
+                symbols.insert(id, symbol.to_string());
             }
             let init = if l.reset <= 1 {
                 Some(l.reset != 0)
@@ -141,11 +137,7 @@ impl Aig {
             } else {
                 panic!()
             };
-            latchs.push(AigLatch::new(
-                l.lit.var().into(),
-                AigEdge::from_lit(l.next),
-                init,
-            ));
+            latchs.push(AigLatch::new(id, AigEdge::from_lit(l.next), init));
         }
         let outputs: Vec<AigEdge> = (0..aiger.num_outputs)
             .map(|i| unsafe { *aiger.outputs.add(i as usize) })
@@ -189,6 +181,7 @@ impl Aig {
             outputs,
             bads,
             constraints,
+            symbols,
         }
     }
 
@@ -209,17 +202,33 @@ impl Aig {
             };
         }
         for i in self.inputs.iter() {
+            let mut cs = CString::default();
+            let s = if let Some(s) = self.get_symbol(self.nodes[*i].id) {
+                cs = CString::new(s).unwrap();
+                cs.as_ptr()
+            } else {
+                null()
+            };
             unsafe {
                 aiger_add_input(
                     aiger,
                     AigEdge::from(self.nodes[*i].id).to_lit().into(),
-                    null() as _,
+                    s as _,
                 )
             };
+            drop(cs);
         }
         for l in self.latchs.iter() {
+            let mut cs = CString::default();
+            let s = if let Some(s) = self.get_symbol(self.nodes[l.input].id) {
+                cs = CString::new(s).unwrap();
+                cs.as_ptr()
+            } else {
+                null()
+            };
             let lit = AigEdge::from(self.nodes[l.input].id).to_lit();
-            unsafe { aiger_add_latch(aiger, lit.into(), l.next.to_lit().into(), null() as _) };
+            unsafe { aiger_add_latch(aiger, lit.into(), l.next.to_lit().into(), s as _) };
+            drop(cs);
             let reset: u32 = if let Some(i) = l.init {
                 i.into()
             } else {

@@ -98,6 +98,12 @@ impl Aig {
             .iter()
             .filter_map(|n| edge_map(*n))
             .collect();
+        let mut symbols = HashMap::new();
+        for (k, s) in self.symbols.iter() {
+            if let Some(r) = refine_map.get(k) {
+                symbols.insert(*r, s.clone());
+            }
+        }
         (
             Self {
                 nodes,
@@ -106,6 +112,7 @@ impl Aig {
                 outputs,
                 bads,
                 constraints,
+                symbols,
             },
             remap,
         )

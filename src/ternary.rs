@@ -1,6 +1,6 @@
 use crate::Aig;
 use std::{
-    fmt::{self, write, Display, Formatter},
+    fmt::{self, Display, Formatter},
     ops::{BitAnd, BitOr, Not},
 };
 
