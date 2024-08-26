@@ -327,6 +327,12 @@ impl Aig {
         !self.new_ands_node(fanin.map(|e| !e))
     }
 
+    pub fn new_eq_node(&mut self, fanin0: AigEdge, fanin1: AigEdge) -> AigEdge {
+        let x = self.new_and_node(fanin0, fanin1);
+        let y = self.new_and_node(!fanin0, !fanin1);
+        self.new_or_node(x, y)
+    }
+
     #[inline]
     pub fn get_symbol(&self, id: usize) -> Option<String> {
         self.symbols.get(&id).cloned()
