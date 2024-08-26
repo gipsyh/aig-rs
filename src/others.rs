@@ -258,7 +258,7 @@ impl Aig {
             if self.nodes[i].is_and() {
                 let fanin0 = edge_map(self.nodes[i].fanin0());
                 let fanin1 = edge_map(self.nodes[i].fanin1());
-                assert!(encode_map[&i] == res.new_and_node(fanin0, fanin1).node_id());
+                assert!(encode_map[&i] == res.trivial_new_and_node(fanin0, fanin1).node_id());
             }
         }
         res.outputs = self.outputs.iter().map(|e| edge_map(*e)).collect();

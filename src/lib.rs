@@ -276,6 +276,13 @@ impl Aig {
         self.latchs.push(AigLatch::new(input, next, init))
     }
 
+    pub fn trivial_new_and_node(&mut self, fanin0: AigEdge, fanin1: AigEdge) -> AigEdge {
+        let nodeid = self.nodes.len();
+        let and = AigNode::new_and(nodeid, fanin0, fanin1);
+        self.nodes.push(and);
+        nodeid.into()
+    }
+
     pub fn new_and_node(&mut self, mut fanin0: AigEdge, mut fanin1: AigEdge) -> AigEdge {
         if fanin0.node_id() > fanin1.node_id() {
             swap(&mut fanin0, &mut fanin1);
