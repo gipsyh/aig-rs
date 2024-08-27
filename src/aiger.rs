@@ -3,8 +3,7 @@ use libc::{fclose, fopen, FILE};
 use logic_form::Lit;
 use std::{
     collections::HashMap,
-    ffi::{c_char, CStr, CString},
-    os::raw::c_void,
+    ffi::{c_char, c_void, CStr, CString},
     ptr::null,
 };
 
@@ -88,18 +87,7 @@ impl Aig {
     //     }
     // }
 
-    pub fn from_file(f: &str) -> Self {
-        let file = CString::new(f).unwrap();
-        let mode = CString::new("r").unwrap();
-        let file = unsafe { fopen(file.as_ptr(), mode.as_ptr()) };
-        if file.is_null() {
-            panic!("error: {f} not found.");
-        }
-        let aiger = unsafe { aiger_init() };
-        if !unsafe { aiger_read_from_file(aiger, file) }.is_null() {
-            panic!("error: read {f} failed.");
-        }
-        unsafe { fclose(file) };
+    pub fn from_aiger(aiger: *mut c_void) -> Self {
         let aiger = unsafe { &mut *(aiger as *mut Aiger) };
         let node_len = (aiger.num_inputs + aiger.num_latches + aiger.num_ands + 1) as usize;
         let mut nodes: Vec<AigNode> = Vec::with_capacity(node_len);
@@ -183,6 +171,21 @@ impl Aig {
             constraints,
             symbols,
         }
+    }
+
+    pub fn from_file(f: &str) -> Self {
+        let file = CString::new(f).unwrap();
+        let mode = CString::new("r").unwrap();
+        let file = unsafe { fopen(file.as_ptr(), mode.as_ptr()) };
+        if file.is_null() {
+            panic!("error: {f} not found.");
+        }
+        let aiger = unsafe { aiger_init() };
+        if !unsafe { aiger_read_from_file(aiger, file) }.is_null() {
+            panic!("error: read {f} failed.");
+        }
+        unsafe { fclose(file) };
+        Self::from_aiger(aiger)
     }
 
     pub fn to_file(&self, f: &str, ascii: bool) {
