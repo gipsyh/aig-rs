@@ -3,7 +3,24 @@ use logic_form::{Clause, Lit, Var};
 use std::collections::{HashMap, HashSet};
 
 impl Aig {
-    pub fn is_xor(&self, n: usize) -> Option<(AigEdge, AigEdge)> {
+    #[inline]
+    fn get_root_refs(&self) -> HashSet<usize> {
+        let mut refs = HashSet::new();
+        for l in self.latchs.iter() {
+            refs.insert(l.next.node_id());
+        }
+        for l in self
+            .constraints
+            .iter()
+            .chain(self.bads.iter())
+            .chain(self.outputs.iter())
+        {
+            refs.insert(l.node_id());
+        }
+        refs
+    }
+
+    fn is_xor(&self, n: usize) -> Option<(AigEdge, AigEdge)> {
         if !self.nodes[n].is_and() {
             return None;
         }
@@ -26,7 +43,7 @@ impl Aig {
         None
     }
 
-    pub fn is_ite(&self, n: usize) -> Option<(AigEdge, AigEdge, AigEdge)> {
+    fn is_ite(&self, n: usize) -> Option<(AigEdge, AigEdge, AigEdge)> {
         if !self.nodes[n].is_and() {
             return None;
         }
@@ -58,11 +75,8 @@ impl Aig {
         Some((i, t, e))
     }
 
-    pub fn get_cnf(&self, logic: &[AigEdge]) -> Vec<Clause> {
-        let mut refs = HashSet::new();
-        for l in logic {
-            refs.insert(l.node_id());
-        }
+    pub fn get_cnf(&self) -> Vec<Clause> {
+        let mut refs = self.get_root_refs();
         let mut ans = Vec::new();
         ans.push(Clause::from([Lit::constant_lit(true)]));
         for i in self.nodes_range().rev() {
