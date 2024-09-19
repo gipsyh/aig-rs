@@ -1,5 +1,5 @@
 mod aiger;
-mod cnf;
+pub mod cnf;
 mod display;
 mod logic_form;
 mod others;

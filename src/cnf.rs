@@ -1,8 +1,8 @@
 use crate::{Aig, AigEdge};
-use logic_form::{Clause, Lit, Var};
+use logic_form::{Clause, Cube, Lemma, Lit, Var};
 use std::{
     collections::{HashMap, HashSet},
-    ops::Deref,
+    ops::{Deref, DerefMut},
 };
 
 #[derive(Default, Clone, Debug)]
@@ -42,6 +42,48 @@ impl NodeCnfContext {
         self.outs.clear();
         self.cnf.clear();
     }
+
+    fn simplify(&mut self) {
+        let mut cnf: Vec<Lemma> = self
+            .cnf
+            .iter()
+            .map(|cls| Lemma::new(Cube::from(cls.as_slice())))
+            .collect();
+        cnf.sort_by_key(|l| l.len());
+        self.cnf.clear();
+        let mut i = 0;
+        while i < cnf.len() {
+            let mut j = i + 1;
+            let mut update = false;
+            while j < cnf.len() {
+                let (res, diff) = cnf[i].subsume_execpt_one(&cnf[j]);
+                if res {
+                    cnf.swap_remove(j);
+                    continue;
+                } else if let Some(diff) = diff {
+                    if cnf[i].len() == cnf[j].len() {
+                        update = true;
+                        let mut cube = cnf[i].cube().clone();
+                        cube.retain(|l| *l != diff);
+                        assert!(cube.len() + 1 == cnf[i].len());
+                        cnf[i] = Lemma::new(cube);
+                        cnf.swap_remove(j);
+                        continue;
+                    } else {
+                        let mut cube = cnf[j].cube().clone();
+                        cube.retain(|l| *l != !diff);
+                        assert!(cube.len() + 1 == cnf[j].len());
+                        cnf[j] = Lemma::new(cube);
+                    }
+                }
+                j += 1;
+            }
+            if !update {
+                self.cnf.push(Clause::from(cnf[i].cube().as_slice()));
+                i += 1;
+            }
+        }
+    }
 }
 
 pub struct AigCnfContext {
@@ -56,7 +98,7 @@ impl AigCnfContext {
     }
 
     #[inline]
-    fn cnf(&self) -> Vec<Clause> {
+    pub fn cnf(&self) -> Vec<Clause> {
         let mut res = Vec::new();
         for c in self.iter() {
             res.extend_from_slice(&c.cnf);
@@ -117,6 +159,7 @@ impl AigCnfContext {
             self.ctx[d].remove(n);
         }
         self.add_node_cnf(o, &new_cnf);
+        self.ctx[o].simplify();
         self.ctx[n].clear();
         true
     }
@@ -128,6 +171,13 @@ impl Deref for AigCnfContext {
     #[inline]
     fn deref(&self) -> &Self::Target {
         &self.ctx
+    }
+}
+
+impl DerefMut for AigCnfContext {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.ctx
     }
 }
 
@@ -311,7 +361,7 @@ impl Aig {
         ans
     }
 
-    pub fn get_node_cnf_context(&self) -> AigCnfContext {
+    pub fn get_cnf_context(&self) -> AigCnfContext {
         let mut refs = self.get_root_refs();
         let mut ctx = AigCnfContext::new(self.num_nodes());
         for i in self.nodes_range().rev() {
@@ -357,8 +407,8 @@ impl Aig {
         ctx
     }
 
-    pub fn get_simplified_cnf(&self) -> Vec<Clause> {
-        let mut ctx = self.get_node_cnf_context();
+    pub fn get_simplified_cnf_context(&self) -> AigCnfContext {
+        let mut ctx = self.get_cnf_context();
         let mut frozen = HashSet::new();
         for i in self.inputs.iter() {
             frozen.insert(*i);
@@ -391,6 +441,9 @@ impl Aig {
                 break;
             }
         }
-        ctx.cnf()
+        for i in self.nodes_range().filter(|l| !frozen.contains(l)) {
+            ctx[i].simplify();
+        }
+        ctx
     }
 }
