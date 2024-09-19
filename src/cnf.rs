@@ -44,45 +44,7 @@ impl NodeCnfContext {
     }
 
     fn simplify(&mut self) {
-        let mut cnf: Vec<Lemma> = self
-            .cnf
-            .iter()
-            .map(|cls| Lemma::new(Cube::from(cls.as_slice())))
-            .collect();
-        cnf.sort_by_key(|l| l.len());
-        self.cnf.clear();
-        let mut i = 0;
-        while i < cnf.len() {
-            let mut j = i + 1;
-            let mut update = false;
-            while j < cnf.len() {
-                let (res, diff) = cnf[i].subsume_execpt_one(&cnf[j]);
-                if res {
-                    cnf.swap_remove(j);
-                    continue;
-                } else if let Some(diff) = diff {
-                    if cnf[i].len() == cnf[j].len() {
-                        update = true;
-                        let mut cube = cnf[i].cube().clone();
-                        cube.retain(|l| *l != diff);
-                        assert!(cube.len() + 1 == cnf[i].len());
-                        cnf[i] = Lemma::new(cube);
-                        cnf.swap_remove(j);
-                        continue;
-                    } else {
-                        let mut cube = cnf[j].cube().clone();
-                        cube.retain(|l| *l != !diff);
-                        assert!(cube.len() + 1 == cnf[j].len());
-                        cnf[j] = Lemma::new(cube);
-                    }
-                }
-                j += 1;
-            }
-            if !update {
-                self.cnf.push(Clause::from(cnf[i].cube().as_slice()));
-                i += 1;
-            }
-        }
+        self.cnf = clause_subsume_simplify(self.cnf.clone());
     }
 }
 
@@ -179,6 +141,57 @@ impl DerefMut for AigCnfContext {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.ctx
     }
+}
+
+fn clause_subsume_simplify(lemmas: Vec<Clause>) -> Vec<Clause> {
+    let mut lemmas: Vec<Lemma> = lemmas
+        .iter()
+        .map(|cls| Lemma::new(Cube::from(cls.as_slice())))
+        .collect();
+    lemmas.sort_by_key(|l| l.len());
+    let mut i = 0;
+    while i < lemmas.len() {
+        if lemmas[i].is_empty() {
+            i += 1;
+            continue;
+        }
+        let mut update = false;
+        for j in 0..lemmas.len() {
+            if i == j {
+                continue;
+            }
+            if lemmas[j].is_empty() {
+                continue;
+            }
+            let (res, diff) = lemmas[i].subsume_execpt_one(&lemmas[j]);
+            if res {
+                lemmas[j] = Default::default();
+                continue;
+            } else if let Some(diff) = diff {
+                if lemmas[i].len() == lemmas[j].len() {
+                    update = true;
+                    let mut cube = lemmas[i].cube().clone();
+                    cube.retain(|l| *l != diff);
+                    assert!(cube.len() + 1 == lemmas[i].len());
+                    lemmas[i] = Lemma::new(cube);
+                    lemmas[j] = Default::default();
+                } else {
+                    let mut cube = lemmas[j].cube().clone();
+                    cube.retain(|l| *l != !diff);
+                    assert!(cube.len() + 1 == lemmas[j].len());
+                    lemmas[j] = Lemma::new(cube);
+                }
+            }
+        }
+        if !update {
+            i += 1;
+        }
+    }
+    lemmas.retain(|l| !l.is_empty());
+    lemmas
+        .into_iter()
+        .map(|l| Clause::from(l.cube().as_slice()))
+        .collect()
 }
 
 impl Aig {
