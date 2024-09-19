@@ -7,12 +7,36 @@ use std::{
 
 #[derive(Default, Clone, Debug)]
 pub struct NodeCnfContext {
-    pub deps: Vec<usize>,
-    pub outs: Vec<usize>,
+    pub deps: HashSet<usize>,
+    pub outs: HashSet<usize>,
     pub cnf: Vec<Clause>,
 }
 
 impl NodeCnfContext {
+    #[inline]
+    fn filter(&self, f: usize) -> (Vec<Clause>, Vec<Clause>) {
+        let mut pos = Vec::new();
+        let mut neg = Vec::new();
+        let f = Var::new(f).lit();
+        for cls in self.cnf.iter() {
+            if let Some(l) = cls.iter().find(|l| l.var() == f.var()) {
+                if *l == f {
+                    pos.push(cls.clone());
+                } else {
+                    neg.push(cls.clone());
+                }
+            }
+        }
+        (pos, neg)
+    }
+
+    fn remove(&mut self, f: usize) {
+        self.deps.retain(|d| *d != f);
+        self.outs.retain(|d| *d != f);
+        let f = Var::new(f);
+        self.cnf.retain(|cls| cls.iter().all(|l| l.var() != f));
+    }
+
     fn clear(&mut self) {
         self.deps.clear();
         self.outs.clear();
@@ -51,76 +75,50 @@ impl AigCnfContext {
                 }
             }
         }
-        let mut deps = Vec::from_iter(deps.into_iter());
-        deps.sort();
         for d in deps.iter() {
-            self.ctx[*d].outs.push(n);
+            self.ctx[*d].outs.insert(n);
         }
-        self.ctx[n].deps = deps;
+        self.ctx[n].deps.extend(deps);
     }
 
-    #[inline]
-    fn filter(&mut self, n: usize, f: usize) -> (Vec<Clause>, Vec<Clause>) {
-        let mut pos = Vec::new();
-        let mut neg = Vec::new();
-        let f = Var::new(f).lit();
-        let mut i = 0;
-        while i < self.ctx[n].cnf.len() {
-            if let Some(l) = self.ctx[n].cnf[i].iter().find(|l| l.var() == f.var()) {
-                let l = *l;
-                let cls = self.ctx[n].cnf.swap_remove(i);
-                if l == f {
-                    pos.push(cls);
-                } else {
-                    neg.push(cls);
-                }
-            } else {
-                i += 1;
-            }
-        }
-        (pos, neg)
-    }
-
-    fn eliminate(&mut self, n: usize) {
+    fn eliminate(&mut self, n: usize) -> bool {
         assert!(self.ctx[n].outs.len() == 1);
         let mut new_cnf = Vec::new();
-        let (pos, neg) = self.filter(n, n);
-        let o = self.ctx[n].outs[0];
-        let (op, on) = self.filter(o, n);
+        let (pos, neg) = self[n].filter(n);
+        let o = *self.ctx[n].outs.iter().next().unwrap();
+        let (op, on) = self[o].filter(n);
         let origin = pos.len() + neg.len() + op.len() + on.len();
-        dbg!(origin);
-        for pcls in pos.iter() {
-            for ncls in neg.iter() {
-                let resolvent = pcls.resolvent(ncls, Var::new(n));
-                assert!(resolvent.len() == 0);
-            }
-        }
-        for pcls in op.iter() {
-            for ncls in on.iter() {
-                let resolvent = pcls.resolvent(ncls, Var::new(n));
-                assert!(resolvent.len() == 0);
-            }
-        }
-        for pcls in pos.iter() {
-            for ncls in on.iter() {
-                let resolvent = pcls.resolvent(ncls, Var::new(n));
-                if !resolvent.is_empty() {
-                    new_cnf.push(resolvent);
+        let mut resolvent = |pcnf: &[Clause], ncnf: &[Clause]| {
+            for pcls in pcnf.iter() {
+                for ncls in ncnf.iter() {
+                    let resolvent = pcls.resolvent(ncls, Var::new(n));
+                    if !resolvent.is_empty() {
+                        new_cnf.push(resolvent);
+                    }
                 }
             }
+        };
+        resolvent(&pos, &neg);
+        resolvent(&op, &on);
+        resolvent(&pos, &on);
+        resolvent(&op, &neg);
+        if new_cnf.len() > origin {
+            // dbg!(n);
+            // dbg!(&self[n]);
+            // dbg!(&pos);
+            // dbg!(&neg);
+            // dbg!(&op);
+            // dbg!(&on);
+            // dbg!(&new_cnf);
+            return false;
         }
-        for pcls in op.iter() {
-            for ncls in neg.iter() {
-                let resolvent = pcls.resolvent(ncls, Var::new(n));
-                if !resolvent.is_empty() {
-                    new_cnf.push(resolvent);
-                }
-            }
+        self.ctx[o].remove(n);
+        for d in self[n].deps.clone() {
+            self.ctx[d].remove(n);
         }
-        dbg!(new_cnf.len());
-        assert!(new_cnf.len() <= origin);
         self.add_node_cnf(o, &new_cnf);
         self.ctx[n].clear();
+        true
     }
 }
 
@@ -377,9 +375,20 @@ impl Aig {
         {
             frozen.insert(l.node_id());
         }
-        for i in self.nodes_range().filter(|l| !frozen.contains(l)) {
-            if ctx[i].outs.len() == 1 {
-                ctx.eliminate(i);
+        loop {
+            let mut update = false;
+            for i in self.nodes_range().filter(|l| !frozen.contains(l)) {
+                if ctx[i].outs.len() == 0 && ctx[i].deps.len() != 0 {
+                    panic!();
+                }
+                if ctx[i].outs.len() == 1 {
+                    if ctx.eliminate(i) {
+                        update = true;
+                    }
+                }
+            }
+            if !update {
+                break;
             }
         }
         ctx.cnf()
