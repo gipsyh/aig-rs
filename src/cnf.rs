@@ -1,7 +1,7 @@
 use crate::{Aig, AigEdge};
 use logic_form::{Clause, Cube, Lemma, Lit, Var};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     ops::{Deref, DerefMut},
 };
 
@@ -460,17 +460,25 @@ impl Aig {
         {
             frozen.insert(l.node_id());
         }
-        for _ in 0.. {
-            let mut update = false;
-            for i in self.nodes_range().filter(|l| !frozen.contains(l)) {
-                if ctx[i].outs.len() > 0 {
-                    if ctx.eliminate(i) {
-                        update = true;
+        let mut candidate = VecDeque::from_iter(self.nodes_range());
+        let mut in_candidate: Vec<bool> = vec![true; self.num_nodes()];
+        while let Some(c) = candidate.pop_front() {
+            in_candidate[c] = false;
+            if frozen.contains(&c) {
+                continue;
+            }
+            if ctx[c].outs.is_empty() {
+                continue;
+            }
+            let deps = ctx[c].deps.clone();
+            let outs = ctx[c].outs.clone();
+            if ctx.eliminate(c) {
+                for d in deps.iter().chain(outs.iter()) {
+                    if !in_candidate[*d] {
+                        in_candidate[*d] = true;
+                        candidate.push_back(*d);
                     }
                 }
-            }
-            if !update {
-                break;
             }
         }
         for i in self.nodes_range().filter(|l| !frozen.contains(l)) {
