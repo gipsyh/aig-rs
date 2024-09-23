@@ -68,6 +68,22 @@ impl AigCnfContext {
         res
     }
 
+    fn cost(&self, n: usize) -> usize {
+        let nv = Var::new(n);
+        let res: usize = self[n]
+            .outs
+            .iter()
+            .map(|o| {
+                self[*o]
+                    .cnf
+                    .iter()
+                    .filter(|cls| cls.iter().any(|l| l.var() == nv))
+                    .count()
+            })
+            .sum();
+        res + self[n].cnf.len()
+    }
+
     fn add_node_cnf(&mut self, n: usize, cnf: &[Clause]) {
         self.ctx[n].cnf.extend_from_slice(cnf);
         let mut deps = HashSet::new();
@@ -85,44 +101,37 @@ impl AigCnfContext {
         self.ctx[n].deps.extend(deps);
     }
 
-    fn eliminate(&mut self, n: usize) -> bool {
-        assert!(self.ctx[n].outs.len() == 1);
-        let mut new_cnf = Vec::new();
+    fn resolvent_of_one_fanout(&mut self, n: usize, o: usize) -> Vec<Clause> {
+        let mut res = Vec::new();
         let (pos, neg) = self[n].filter(n);
-        let o = *self.ctx[n].outs.iter().next().unwrap();
         let (op, on) = self[o].filter(n);
-        let origin = pos.len() + neg.len() + op.len() + on.len();
-        let mut resolvent = |pcnf: &[Clause], ncnf: &[Clause]| {
-            for pcls in pcnf.iter() {
-                for ncls in ncnf.iter() {
-                    let resolvent = pcls.resolvent(ncls, Var::new(n));
-                    if !resolvent.is_empty() {
-                        new_cnf.push(resolvent);
-                    }
-                }
-            }
-        };
-        resolvent(&pos, &neg);
-        resolvent(&op, &on);
-        resolvent(&pos, &on);
-        resolvent(&op, &neg);
-        if new_cnf.len() > origin {
-            // dbg!(n);
-            // dbg!(&self[n]);
-            // dbg!(&pos);
-            // dbg!(&neg);
-            // dbg!(&op);
-            // dbg!(&on);
-            // dbg!(&new_cnf);
+        let pivot = Var::new(n);
+        res.extend(resolvent(&pos, &on, pivot));
+        res.extend(resolvent(&op, &neg, pivot));
+        clause_subsume_simplify(res)
+    }
+
+    fn eliminate(&mut self, n: usize) -> bool {
+        let origin_cost = self.cost(n);
+        let mut o_resolvent = Vec::new();
+        let mut outs = Vec::from_iter(self[n].outs.clone());
+        outs.sort();
+        for o in outs.iter() {
+            o_resolvent.push(self.resolvent_of_one_fanout(n, *o));
+        }
+        let new_cost = o_resolvent.iter().map(|cls| cls.len()).sum::<usize>();
+        if new_cost > origin_cost {
             return false;
         }
-        self.ctx[o].remove(n);
         for d in self[n].deps.clone() {
             self.ctx[d].remove(n);
         }
-        self.add_node_cnf(o, &new_cnf);
-        self.ctx[o].simplify();
         self.ctx[n].clear();
+        for (o, or) in outs.iter().zip(o_resolvent.iter()) {
+            self.ctx[*o].remove(n);
+            self.add_node_cnf(*o, &or);
+            self.ctx[*o].simplify();
+        }
         true
     }
 }
@@ -141,6 +150,19 @@ impl DerefMut for AigCnfContext {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.ctx
     }
+}
+
+fn resolvent(pcnf: &[Clause], ncnf: &[Clause], pivot: Var) -> Vec<Clause> {
+    let mut res = Vec::new();
+    for pcls in pcnf.iter() {
+        for ncls in ncnf.iter() {
+            let resolvent = pcls.resolvent(ncls, pivot);
+            if !resolvent.is_empty() {
+                res.push(resolvent);
+            }
+        }
+    }
+    res
 }
 
 fn clause_subsume_simplify(lemmas: Vec<Clause>) -> Vec<Clause> {
@@ -438,13 +460,10 @@ impl Aig {
         {
             frozen.insert(l.node_id());
         }
-        loop {
+        for _ in 0.. {
             let mut update = false;
             for i in self.nodes_range().filter(|l| !frozen.contains(l)) {
-                if ctx[i].outs.len() == 0 && ctx[i].deps.len() != 0 {
-                    panic!();
-                }
-                if ctx[i].outs.len() == 1 {
+                if ctx[i].outs.len() > 0 {
                     if ctx.eliminate(i) {
                         update = true;
                     }
