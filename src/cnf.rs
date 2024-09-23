@@ -101,7 +101,7 @@ impl AigCnfContext {
         self.ctx[n].deps.extend(deps);
     }
 
-    fn resolvent_of_one_fanout(&mut self, n: usize, o: usize) -> Vec<Clause> {
+    fn resolvent_of_one_fanout(&self, n: usize, o: usize) -> Vec<Clause> {
         let mut res = Vec::new();
         let (pos, neg) = self[n].filter(n);
         let (op, on) = self[o].filter(n);
@@ -111,17 +111,29 @@ impl AigCnfContext {
         clause_subsume_simplify(res)
     }
 
-    fn eliminate(&mut self, n: usize) -> bool {
+    fn try_eliminate(&mut self, n: usize, remove: bool) -> Option<usize> {
+        if self[n].outs.is_empty() {
+            return None;
+        }
         let origin_cost = self.cost(n);
         let mut o_resolvent = Vec::new();
         let mut outs = Vec::from_iter(self[n].outs.clone());
         outs.sort();
+        let mut new_cost = 0;
         for o in outs.iter() {
-            o_resolvent.push(self.resolvent_of_one_fanout(n, *o));
+            if new_cost > origin_cost {
+                return None;
+            }
+            let or = self.resolvent_of_one_fanout(n, *o);
+            new_cost += or.len();
+            o_resolvent.push(or);
         }
         let new_cost = o_resolvent.iter().map(|cls| cls.len()).sum::<usize>();
         if new_cost > origin_cost {
-            return false;
+            return None;
+        }
+        if !remove {
+            return Some(origin_cost - new_cost);
         }
         for d in self[n].deps.clone() {
             self.ctx[d].remove(n);
@@ -132,7 +144,7 @@ impl AigCnfContext {
             self.add_node_cnf(*o, &or);
             self.ctx[*o].simplify();
         }
-        true
+        Some(origin_cost - new_cost)
     }
 }
 
@@ -472,7 +484,7 @@ impl Aig {
             }
             let deps = ctx[c].deps.clone();
             let outs = ctx[c].outs.clone();
-            if ctx.eliminate(c) {
+            if ctx.try_eliminate(c, true).is_some() {
                 for d in deps.iter().chain(outs.iter()) {
                     if !in_candidate[*d] {
                         in_candidate[*d] = true;
@@ -481,6 +493,7 @@ impl Aig {
                 }
             }
         }
+
         for i in self.nodes_range().filter(|l| !frozen.contains(l)) {
             ctx[i].simplify();
         }
