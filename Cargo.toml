@@ -1,6 +1,6 @@
 [package]
 name = "aig"
-version = "0.2.1"
+version = "0.2.2"
 license = "MIT"
 description = "Rust Aig library"
 edition = "2021"
@@ -12,7 +12,7 @@ keywords = ["logic", "aig", "formal_method", "model_checking"]
 
 [dependencies]
 libc = "0.2.155"
-logic-form = { version = "0.2.0", path = "../logic-form" }
+logic-form = { path = "../logic-form", version = "0.2" }
 
 [build-dependencies]
 cc = "1.0.99"
