@@ -1,6 +1,6 @@
 [package]
 name = "aig"
-version = "0.2.2"
+version = "0.2.3"
 license = "MIT"
 description = "Rust Aig library"
 edition = "2021"
