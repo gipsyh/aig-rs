@@ -270,7 +270,7 @@ impl Aig {
 
     pub fn compress_property(&mut self) -> Vec<AigEdge> {
         let b = take(&mut self.bads);
-        let p = self.new_ands_node(b.clone().into_iter());
+        let p = self.new_ors_node(b.clone().into_iter());
         self.bads.push(p);
         b
     }
