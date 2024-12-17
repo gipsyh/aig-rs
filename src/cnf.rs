@@ -141,7 +141,7 @@ impl AigCnfContext {
         self.ctx[n].clear();
         for (o, or) in outs.iter().zip(o_resolvent.iter()) {
             self.ctx[*o].remove(n);
-            self.add_node_cnf(*o, &or);
+            self.add_node_cnf(*o, or);
             self.ctx[*o].simplify();
         }
         Some(origin_cost - new_cost)
@@ -419,11 +419,12 @@ impl Aig {
                     refs.insert(xor1.node_id());
                     let xor0 = xor0.to_lit();
                     let xor1 = xor1.to_lit();
-                    let mut cnf = Vec::new();
-                    cnf.push(Clause::from([!xor0, xor1, n]));
-                    cnf.push(Clause::from([xor0, !xor1, n]));
-                    cnf.push(Clause::from([xor0, xor1, !n]));
-                    cnf.push(Clause::from([!xor0, !xor1, !n]));
+                    let cnf = vec![
+                        Clause::from([!xor0, xor1, n]),
+                        Clause::from([xor0, !xor1, n]),
+                        Clause::from([xor0, xor1, !n]),
+                        Clause::from([!xor0, !xor1, !n]),
+                    ];
                     ctx.add_node_cnf(n.var().into(), &cnf);
                 } else if let Some((c, t, e)) = self.is_ite(i) {
                     refs.insert(c.node_id());
@@ -432,21 +433,23 @@ impl Aig {
                     let c = c.to_lit();
                     let t = t.to_lit();
                     let e = e.to_lit();
-                    let mut cnf = Vec::new();
-                    cnf.push(Clause::from([t, !c, !n]));
-                    cnf.push(Clause::from([!t, !c, n]));
-                    cnf.push(Clause::from([e, c, !n]));
-                    cnf.push(Clause::from([!e, c, n]));
+                    let cnf = vec![
+                        Clause::from([t, !c, !n]),
+                        Clause::from([!t, !c, n]),
+                        Clause::from([e, c, !n]),
+                        Clause::from([!e, c, n]),
+                    ];
                     ctx.add_node_cnf(n.var().into(), &cnf);
                 } else {
                     refs.insert(self.nodes[i].fanin0().id);
                     refs.insert(self.nodes[i].fanin1().id);
                     let fanin0 = self.nodes[i].fanin0().to_lit();
                     let fanin1 = self.nodes[i].fanin1().to_lit();
-                    let mut cnf = Vec::new();
-                    cnf.push(Clause::from([!n, fanin0]));
-                    cnf.push(Clause::from([!n, fanin1]));
-                    cnf.push(Clause::from([n, !fanin0, !fanin1]));
+                    let cnf = vec![
+                        Clause::from([!n, fanin0]),
+                        Clause::from([!n, fanin1]),
+                        Clause::from([n, !fanin0, !fanin1]),
+                    ];
                     ctx.add_node_cnf(n.var().into(), &cnf);
                 }
             }

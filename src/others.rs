@@ -186,7 +186,7 @@ impl Aig {
             self.inputs.push(map(*i));
         }
         for l in other.latchs.iter() {
-            let mut l = l.clone();
+            let mut l = *l;
             l.input = map(l.input);
             l.next = l.next.map(&map);
             self.latchs.push(l);
@@ -258,10 +258,10 @@ impl Aig {
         let constrains = res.new_ands_node(res.constraints.clone().into_iter());
         let next = res.new_and_node(latch.into(), constrains);
         res.new_latch(latch, next, Some(true));
-        if res.bads.len() > 0 {
+        if !res.bads.is_empty() {
             res.bads[0] = res.new_and_node(next, res.bads[0]);
         }
-        if res.outputs.len() > 0 {
+        if !res.outputs.is_empty() {
             res.outputs[0] = res.new_and_node(next, res.outputs[0]);
         }
         res.constraints.clear();
