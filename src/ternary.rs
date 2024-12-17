@@ -49,7 +49,8 @@ impl<'a> TernarySimulate<'a> {
     pub fn simulate(&mut self, input: Vec<TernaryValue>) {
         self.value = self.aig.ternary_simulate(&input, &self.state);
         for i in 0..self.aig.latchs.len() {
-            self.state[i] = self.value[self.aig.latchs[i].input];
+            let ln = self.aig.latchs[i].next;
+            self.state[i] = self.value[ln.id].not_if(ln.compl());
         }
     }
 
