@@ -47,13 +47,13 @@ impl Aig {
     }
 
     pub fn coi_refine(&self) -> (Aig, HashMap<usize, usize>) {
-        let aig_bad = if self.bads.is_empty() {
-            self.outputs[0]
-        } else {
-            self.bads[0]
-        };
-        let mut refine_root: Vec<usize> = self.constraints.iter().map(|c| c.node_id()).collect();
-        refine_root.push(aig_bad.node_id());
+        let refine_root: Vec<usize> = self
+            .constraints
+            .iter()
+            .chain(self.outputs.iter())
+            .chain(self.bads.iter())
+            .map(|e| e.node_id())
+            .collect();
         let refine = self.coi(&refine_root);
         let mut refine = Vec::from_iter(refine);
         refine.sort();
@@ -268,11 +268,10 @@ impl Aig {
         res
     }
 
-    pub fn compress_property(&mut self) {
-        let mut o = take(&mut self.outputs);
+    pub fn compress_property(&mut self) -> Vec<AigEdge> {
         let b = take(&mut self.bads);
-        o.extend(b);
-        let p = self.new_ands_node(o.into_iter());
+        let p = self.new_ands_node(b.clone().into_iter());
         self.bads.push(p);
+        b
     }
 }
