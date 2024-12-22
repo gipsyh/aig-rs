@@ -268,11 +268,27 @@ impl Aig {
         id
     }
 
-    pub fn new_input(&mut self, input: usize) {
-        self.inputs.push(input)
+    #[inline]
+    pub fn new_input(&mut self) -> usize {
+        let input = self.new_leaf_node();
+        self.inputs.push(input);
+        input
     }
 
-    pub fn new_latch(&mut self, input: usize, next: AigEdge, init: Option<bool>) {
+    #[inline]
+    pub fn add_input(&mut self, input: usize) {
+        self.inputs.push(input);
+    }
+
+    #[inline]
+    pub fn new_latch(&mut self, next: AigEdge, init: Option<bool>) -> usize {
+        let input = self.new_leaf_node();
+        self.latchs.push(AigLatch::new(input, next, init));
+        input
+    }
+
+    #[inline]
+    pub fn add_latch(&mut self, input: usize, next: AigEdge, init: Option<bool>) {
         self.latchs.push(AigLatch::new(input, next, init))
     }
 

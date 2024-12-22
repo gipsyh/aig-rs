@@ -224,14 +224,12 @@ impl Aig {
         assert!(max_id + 1 == self.nodes.len());
         let edge_map = |e: AigEdge| AigEdge::new(encode_map[&e.node_id()], e.compl());
         for l in self.inputs.iter() {
-            let nl = res.new_leaf_node();
+            let nl = res.new_input();
             assert!(nl == encode_map[l]);
-            res.new_input(nl);
         }
         for l in self.latchs.iter() {
-            let nl = res.new_leaf_node();
+            let nl = res.new_latch(edge_map(l.next), l.init);
             assert!(nl == encode_map[&l.input]);
-            res.new_latch(nl, edge_map(l.next), l.init);
         }
         for i in 1..self.nodes.len() {
             if self.nodes[i].is_and() {
@@ -257,7 +255,7 @@ impl Aig {
         let latch = res.new_leaf_node();
         let constrains = res.new_ands_node(res.constraints.clone().into_iter());
         let next = res.new_and_node(latch.into(), constrains);
-        res.new_latch(latch, next, Some(true));
+        res.add_latch(latch, next, Some(true));
         if !res.bads.is_empty() {
             res.bads[0] = res.new_and_node(next, res.bads[0]);
         }
