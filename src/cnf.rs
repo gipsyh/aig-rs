@@ -55,7 +55,7 @@ pub struct AigCnfContext {
 impl AigCnfContext {
     fn new(num: usize) -> Self {
         let mut ctx = vec![NodeCnfContext::default(); num];
-        ctx[0].cnf.push(Clause::from([Lit::constant_lit(true)]));
+        ctx[0].cnf.push(Clause::from([Lit::constant(true)]));
         Self { ctx }
     }
 
@@ -304,7 +304,7 @@ impl Aig {
     pub fn get_cnf(&self) -> Vec<Clause> {
         let mut refs = self.get_root_refs();
         let mut ans = Vec::new();
-        ans.push(Clause::from([Lit::constant_lit(true)]));
+        ans.push(Clause::from([Lit::constant(true)]));
         for i in self.nodes_range().rev() {
             if self.nodes[i].is_and() && (refs.contains(&i)) {
                 let n = Var::new(self.nodes[i].node_id()).lit();
