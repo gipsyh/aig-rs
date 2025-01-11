@@ -1,9 +1,7 @@
 use crate::{Aig, AigEdge, AigNodeType};
+use ahash::{AHashMap, AHashSet};
 use logic_form::Cube;
-use std::{
-    collections::{HashMap, HashSet},
-    mem::take,
-};
+use std::mem::take;
 
 impl Aig {
     pub fn latch_init_cube(&self) -> Cube {
@@ -14,12 +12,12 @@ impl Aig {
         )
     }
 
-    pub fn coi(&self, root: &[usize]) -> HashSet<usize> {
-        let mut latchs = HashMap::new();
+    pub fn coi(&self, root: &[usize]) -> AHashSet<usize> {
+        let mut latchs = AHashMap::new();
         for l in self.latchs.iter() {
             latchs.insert(l.input, *l);
         }
-        let mut refine = HashSet::new();
+        let mut refine = AHashSet::new();
         refine.insert(AigEdge::constant_edge(true).node_id());
         let mut queue = Vec::new();
         for r in root {
@@ -47,7 +45,7 @@ impl Aig {
         refine
     }
 
-    pub fn coi_refine(&self) -> (Aig, HashMap<usize, usize>) {
+    pub fn coi_refine(&self) -> (Aig, AHashMap<usize, usize>) {
         let refine_root: Vec<usize> = self
             .constraints
             .iter()
@@ -58,7 +56,7 @@ impl Aig {
         let refine = self.coi(&refine_root);
         let mut refine = Vec::from_iter(refine);
         refine.sort();
-        let mut refine_map = HashMap::new();
+        let mut refine_map = AHashMap::new();
         for (i, r) in refine.iter().enumerate() {
             refine_map.insert(r, i);
         }
@@ -68,7 +66,7 @@ impl Aig {
                 .map(|new_id| AigEdge::new(*new_id, e.complement))
         };
         let mut nodes = Vec::new();
-        let mut remap = HashMap::new();
+        let mut remap = AHashMap::new();
         for n in self.nodes.iter() {
             if let Some(new_id) = refine_map.get(&n.node_id()) {
                 remap.insert(*new_id, n.node_id());
@@ -102,7 +100,7 @@ impl Aig {
             .iter()
             .filter_map(|n| edge_map(*n))
             .collect();
-        let mut symbols = HashMap::new();
+        let mut symbols = AHashMap::new();
         for (k, s) in self.symbols.iter() {
             if let Some(r) = refine_map.get(k) {
                 symbols.insert(*r, s.clone());
@@ -123,7 +121,7 @@ impl Aig {
     }
 
     pub fn unroll(&mut self, from: &Aig) {
-        let mut next_map = HashMap::new();
+        let mut next_map = AHashMap::new();
         let false_edge = AigEdge::constant_edge(false);
         next_map.insert(false_edge.node_id(), false_edge);
         for l in self.latchs.iter() {
@@ -205,7 +203,7 @@ impl Aig {
 
     pub fn reencode(&self) -> Self {
         let mut res = Self::new();
-        let mut encode_map = HashMap::new();
+        let mut encode_map = AHashMap::new();
         encode_map.insert(0, 0);
         let mut max_id = 0;
         for l in self.inputs.iter() {

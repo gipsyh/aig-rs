@@ -1,14 +1,15 @@
 use crate::{Aig, AigEdge};
+use ahash::{AHashMap, AHashSet};
 use logic_form::{Clause, Cube, DagCnf, Lemma, Lit, Var};
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::VecDeque,
     ops::{Deref, DerefMut},
 };
 
 #[derive(Default, Clone, Debug)]
 pub struct NodeCnfContext {
-    pub deps: HashSet<usize>,
-    pub outs: HashSet<usize>,
+    pub deps: AHashSet<usize>,
+    pub outs: AHashSet<usize>,
     pub cnf: Vec<Clause>,
 }
 
@@ -86,7 +87,7 @@ impl AigCnfContext {
 
     fn add_node_cnf(&mut self, n: usize, cnf: &[Clause]) {
         self.ctx[n].cnf.extend_from_slice(cnf);
-        let mut deps = HashSet::new();
+        let mut deps = AHashSet::new();
         for cls in cnf.iter() {
             for l in cls.iter() {
                 let v: usize = l.var().into();
@@ -230,8 +231,8 @@ fn clause_subsume_simplify(lemmas: Vec<Clause>) -> Vec<Clause> {
 
 impl Aig {
     #[inline]
-    fn get_root_refs(&self) -> HashSet<usize> {
-        let mut refs = HashSet::new();
+    fn get_root_refs(&self) -> AHashSet<usize> {
+        let mut refs = AHashSet::new();
         for l in self.latchs.iter() {
             refs.insert(l.next.node_id());
         }
@@ -337,11 +338,11 @@ impl Aig {
     }
 
     pub fn get_optimized_cnf(&self, logic: &[AigEdge]) -> Vec<Clause> {
-        let mut latchs = HashMap::new();
+        let mut latchs = AHashMap::new();
         for l in self.latchs.iter() {
             latchs.insert(l.input, *l);
         }
-        let mut refs = HashSet::new();
+        let mut refs = AHashSet::new();
         let mut queue = Vec::new();
         for l in logic {
             if !refs.contains(l) {
@@ -453,7 +454,7 @@ impl Aig {
 
     pub fn get_simplified_cnf_context(&self) -> AigCnfContext {
         let mut ctx = self.get_cnf_context();
-        let mut frozen = HashSet::new();
+        let mut frozen = AHashSet::new();
         for i in self.inputs.iter() {
             frozen.insert(*i);
         }

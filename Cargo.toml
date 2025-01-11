@@ -11,6 +11,7 @@ keywords = ["aig", "formal_method", "model_checking"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+ahash = "0.8.11"
 libc = "0.2.155"
 logic-form = { path = "../logic-form", version = "0.2.7" }
 

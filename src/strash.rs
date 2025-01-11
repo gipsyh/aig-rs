@@ -1,10 +1,11 @@
 use crate::{Aig, AigEdge};
-use std::{collections::HashMap, mem::swap};
+use ahash::AHashMap;
+use std::mem::swap;
 
 impl Aig {
     pub fn strash(&self) -> Self {
-        let mut map = HashMap::new();
-        let mut strash_map = HashMap::new();
+        let mut map = AHashMap::new();
+        let mut strash_map = AHashMap::new();
         for node in self.nodes.iter() {
             if node.is_and() {
                 let mut fanin0 = node.fanin0();
