@@ -1,6 +1,6 @@
 use crate::{Aig, AigEdge, AigNodeType};
 use ahash::{AHashMap, AHashSet};
-use logic_form::Cube;
+use logic_form::{Cube, Var};
 use std::mem::take;
 
 impl Aig {
@@ -45,7 +45,7 @@ impl Aig {
         refine
     }
 
-    pub fn coi_refine(&self) -> (Aig, AHashMap<usize, usize>) {
+    pub fn coi_refine(&self) -> (Aig, AHashMap<Var, Var>) {
         let refine_root: Vec<usize> = self
             .constraints
             .iter()
@@ -69,7 +69,7 @@ impl Aig {
         let mut remap = AHashMap::new();
         for n in self.nodes.iter() {
             if let Some(new_id) = refine_map.get(&n.node_id()) {
-                remap.insert(*new_id, n.node_id());
+                remap.insert(Var::new(*new_id), Var::new(n.node_id()));
                 let mut new_node = n.clone();
                 new_node.id = *new_id;
                 if let AigNodeType::And(fanin0, fanin1) = &mut new_node.typ {
