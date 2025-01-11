@@ -1,5 +1,5 @@
 use crate::{Aig, AigEdge};
-use logic_form::{Clause, Cube, Lemma, Lit, Var};
+use logic_form::{Clause, Cube, DagCnf, Lemma, Lit, Var};
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     ops::{Deref, DerefMut},
@@ -301,10 +301,12 @@ impl Aig {
         Some((i, t, e))
     }
 
-    pub fn get_cnf(&self) -> Vec<Clause> {
+    pub fn get_cnf(&self) -> DagCnf {
         let mut refs = self.get_root_refs();
-        let mut ans = Vec::new();
-        ans.push(Clause::from([Lit::constant(true)]));
+        let mut ans = DagCnf::new();
+        for node in self.nodes.iter().skip(1) {
+            assert_eq!(Var::new(node.node_id()), ans.new_var());
+        }
         for i in self.nodes_range().rev() {
             if self.nodes[i].is_and() && (refs.contains(&i)) {
                 let n = Var::new(self.nodes[i].node_id()).lit();
@@ -313,10 +315,7 @@ impl Aig {
                     refs.insert(xor1.node_id());
                     let xor0 = xor0.to_lit();
                     let xor1 = xor1.to_lit();
-                    ans.push(Clause::from([!xor0, xor1, n]));
-                    ans.push(Clause::from([xor0, !xor1, n]));
-                    ans.push(Clause::from([xor0, xor1, !n]));
-                    ans.push(Clause::from([!xor0, !xor1, !n]));
+                    ans.add_xor_rel(n, xor0, xor1);
                 } else if let Some((c, t, e)) = self.is_ite(i) {
                     refs.insert(c.node_id());
                     refs.insert(t.node_id());
@@ -324,18 +323,13 @@ impl Aig {
                     let c = c.to_lit();
                     let t = t.to_lit();
                     let e = e.to_lit();
-                    ans.push(Clause::from([t, !c, !n]));
-                    ans.push(Clause::from([!t, !c, n]));
-                    ans.push(Clause::from([e, c, !n]));
-                    ans.push(Clause::from([!e, c, n]));
+                    ans.add_ite_rel(n, c, t, e);
                 } else {
                     refs.insert(self.nodes[i].fanin0().id);
                     refs.insert(self.nodes[i].fanin1().id);
                     let fanin0 = self.nodes[i].fanin0().to_lit();
                     let fanin1 = self.nodes[i].fanin1().to_lit();
-                    ans.push(Clause::from([!n, fanin0]));
-                    ans.push(Clause::from([!n, fanin1]));
-                    ans.push(Clause::from([n, !fanin0, !fanin1]));
+                    ans.add_and_rel(n, fanin0, fanin1);
                 }
             }
         }
