@@ -1,15 +1,16 @@
-use crate::{Aig, AigCube, AigEdge, AigNodeType};
+use crate::{Aig, AigEdge, AigNodeType};
+use logic_form::Cube;
 use std::{
     collections::{HashMap, HashSet},
     mem::take,
 };
 
 impl Aig {
-    pub fn latch_init_cube(&self) -> AigCube {
-        AigCube::from_iter(
+    pub fn latch_init_cube(&self) -> Cube {
+        Cube::from_iter(
             self.latchs
                 .iter()
-                .filter_map(|l| l.init.map(|init| AigEdge::new(l.input, !init))),
+                .filter_map(|l| l.init.map(|init| AigEdge::new(l.input, !init).to_lit())),
         )
     }
 

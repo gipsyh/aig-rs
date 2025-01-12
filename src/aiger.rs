@@ -70,23 +70,6 @@ struct AigerAnd {
 }
 
 impl Aig {
-    // fn setup_fanouts(&mut self) {
-    //     for id in self.nodes_range() {
-    //         if self.nodes[id].is_and() {
-    //             let fanin0 = self.nodes[id].fanin0();
-    //             let compl = fanin0.compl();
-    //             self.nodes[fanin0.node_id()]
-    //                 .fanouts
-    //                 .push(AigEdge::new(id, compl));
-    //             let fanin1 = self.nodes[id].fanin1();
-    //             let compl = fanin1.compl();
-    //             self.nodes[fanin1.node_id()]
-    //                 .fanouts
-    //                 .push(AigEdge::new(id, compl));
-    //         }
-    //     }
-    // }
-
     pub fn from_aiger(aiger: *mut c_void) -> Self {
         let aiger = unsafe { &mut *(aiger as *mut Aiger) };
         let node_len = (aiger.num_inputs + aiger.num_latches + aiger.num_ands + 1) as usize;

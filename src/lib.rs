@@ -1,14 +1,11 @@
 mod aiger;
 pub mod cnf;
 mod display;
-mod logic_form;
 mod others;
-mod simplify;
 mod strash;
 mod ternary;
 
-pub use crate::logic_form::*;
-use ::logic_form::Lit;
+use logic_form::Lit;
 use std::{
     collections::HashMap,
     mem::swap,
@@ -396,19 +393,6 @@ impl Aig {
         }
         flag
     }
-
-    // pub fn fanout_logic_cone(&self, logic: AigEdge) -> Vec<bool> {
-    //     let mut flag = vec![false; self.num_nodes()];
-    //     flag[logic.node_id()] = true;
-    //     for id in self.nodes_range_with_false() {
-    //         if flag[id] {
-    //             for f in &self.nodes[id].fanouts {
-    //                 flag[f.node_id()] = true;
-    //             }
-    //         }
-    //     }
-    //     flag
-    // }
 }
 
 impl Default for Aig {
