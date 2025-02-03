@@ -1,6 +1,6 @@
 [package]
 name = "aig"
-version = "0.2.6"
+version = "0.2.7"
 license = "MIT"
 description = "Rust Aig library"
 edition = "2021"
@@ -16,4 +16,4 @@ logic-form = { path = "../logic-form", version = "0.2.7" }
 
 [build-dependencies]
 cc = "1.0.99"
-giputils = { path = "../giputils", version = "0.2" }
+giputils = { path = "../giputils", version = "0.2.5" }
