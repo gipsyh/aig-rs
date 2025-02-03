@@ -1,15 +1,8 @@
 extern crate cc;
 
-use std::process::Command;
-
 fn main() -> Result<(), String> {
-    Command::new("git")
-        .args(["submodule", "update", "--init"])
-        .status()
-        .expect("Failed to update submodules.");
-
+    giputils::build::git_submodule_update()?;
     println!("cargo:rerun-if-changed=./aiger");
-
     cc::Build::new()
         .include("aiger")
         .file("aiger/aiger.c")
