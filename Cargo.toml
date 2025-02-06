@@ -1,6 +1,6 @@
 [package]
 name = "aig"
-version = "0.2.7"
+version = "0.2.8"
 license = "MIT"
 description = "Rust Aig library"
 edition = "2021"
@@ -12,8 +12,8 @@ keywords = ["aig", "formal_method", "model_checking"]
 
 [dependencies]
 libc = "0.2.155"
-logic-form = { path = "../logic-form", version = "0.2.7" }
-giputils = { path = "../giputils", version = "0.2.5" }
+logic-form = { path = "../logic-form", version = "0.2.11" }
+giputils = { path = "../giputils", version = "0.2.6" }
 
 [build-dependencies]
 cc = "1.0.99"
