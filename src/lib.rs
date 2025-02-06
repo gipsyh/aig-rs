@@ -5,9 +5,9 @@ mod others;
 mod strash;
 mod ternary;
 
+use giputils::hash::GHashMap;
 use logic_form::Lit;
 use std::{
-    collections::HashMap,
     mem::swap,
     ops::{Index, Not, Range},
     vec,
@@ -236,7 +236,7 @@ pub struct Aig {
     pub outputs: Vec<AigEdge>,
     pub bads: Vec<AigEdge>,
     pub constraints: Vec<AigEdge>,
-    pub symbols: HashMap<usize, String>,
+    pub symbols: GHashMap<usize, String>,
 }
 
 impl Aig {

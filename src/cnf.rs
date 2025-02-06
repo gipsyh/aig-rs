@@ -1,14 +1,15 @@
 use crate::{Aig, AigEdge};
-use logic_form::{Clause, Cube, Lemma, Lit, Var};
+use giputils::hash::{GHashMap, GHashSet};
+use logic_form::{Clause, Cube, DagCnf, Lemma, Lit, Var};
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::VecDeque,
     ops::{Deref, DerefMut},
 };
 
 #[derive(Default, Clone, Debug)]
 pub struct NodeCnfContext {
-    pub deps: HashSet<usize>,
-    pub outs: HashSet<usize>,
+    pub deps: GHashSet<usize>,
+    pub outs: GHashSet<usize>,
     pub cnf: Vec<Clause>,
 }
 
@@ -86,7 +87,7 @@ impl AigCnfContext {
 
     fn add_node_cnf(&mut self, n: usize, cnf: &[Clause]) {
         self.ctx[n].cnf.extend_from_slice(cnf);
-        let mut deps = HashSet::new();
+        let mut deps = GHashSet::new();
         for cls in cnf.iter() {
             for l in cls.iter() {
                 let v: usize = l.var().into();
@@ -230,8 +231,8 @@ fn clause_subsume_simplify(lemmas: Vec<Clause>) -> Vec<Clause> {
 
 impl Aig {
     #[inline]
-    fn get_root_refs(&self) -> HashSet<usize> {
-        let mut refs = HashSet::new();
+    fn get_root_refs(&self) -> GHashSet<usize> {
+        let mut refs = GHashSet::new();
         for l in self.latchs.iter() {
             refs.insert(l.next.node_id());
         }
@@ -301,10 +302,12 @@ impl Aig {
         Some((i, t, e))
     }
 
-    pub fn get_cnf(&self) -> Vec<Clause> {
+    pub fn get_cnf(&self) -> DagCnf {
         let mut refs = self.get_root_refs();
-        let mut ans = Vec::new();
-        ans.push(Clause::from([Lit::constant(true)]));
+        let mut ans = DagCnf::new();
+        for node in self.nodes.iter().skip(1) {
+            assert_eq!(Var::new(node.node_id()), ans.new_var());
+        }
         for i in self.nodes_range().rev() {
             if self.nodes[i].is_and() && (refs.contains(&i)) {
                 let n = Var::new(self.nodes[i].node_id()).lit();
@@ -313,10 +316,7 @@ impl Aig {
                     refs.insert(xor1.node_id());
                     let xor0 = xor0.to_lit();
                     let xor1 = xor1.to_lit();
-                    ans.push(Clause::from([!xor0, xor1, n]));
-                    ans.push(Clause::from([xor0, !xor1, n]));
-                    ans.push(Clause::from([xor0, xor1, !n]));
-                    ans.push(Clause::from([!xor0, !xor1, !n]));
+                    ans.add_xor_rel(n, xor0, xor1);
                 } else if let Some((c, t, e)) = self.is_ite(i) {
                     refs.insert(c.node_id());
                     refs.insert(t.node_id());
@@ -324,18 +324,13 @@ impl Aig {
                     let c = c.to_lit();
                     let t = t.to_lit();
                     let e = e.to_lit();
-                    ans.push(Clause::from([t, !c, !n]));
-                    ans.push(Clause::from([!t, !c, n]));
-                    ans.push(Clause::from([e, c, !n]));
-                    ans.push(Clause::from([!e, c, n]));
+                    ans.add_ite_rel(n, c, t, e);
                 } else {
                     refs.insert(self.nodes[i].fanin0().id);
                     refs.insert(self.nodes[i].fanin1().id);
                     let fanin0 = self.nodes[i].fanin0().to_lit();
                     let fanin1 = self.nodes[i].fanin1().to_lit();
-                    ans.push(Clause::from([!n, fanin0]));
-                    ans.push(Clause::from([!n, fanin1]));
-                    ans.push(Clause::from([n, !fanin0, !fanin1]));
+                    ans.add_and_rel(n, fanin0, fanin1);
                 }
             }
         }
@@ -343,11 +338,11 @@ impl Aig {
     }
 
     pub fn get_optimized_cnf(&self, logic: &[AigEdge]) -> Vec<Clause> {
-        let mut latchs = HashMap::new();
+        let mut latchs = GHashMap::new();
         for l in self.latchs.iter() {
             latchs.insert(l.input, *l);
         }
-        let mut refs = HashSet::new();
+        let mut refs = GHashSet::new();
         let mut queue = Vec::new();
         for l in logic {
             if !refs.contains(l) {
@@ -459,7 +454,7 @@ impl Aig {
 
     pub fn get_simplified_cnf_context(&self) -> AigCnfContext {
         let mut ctx = self.get_cnf_context();
-        let mut frozen = HashSet::new();
+        let mut frozen = GHashSet::new();
         for i in self.inputs.iter() {
             frozen.insert(*i);
         }

@@ -13,6 +13,7 @@ keywords = ["aig", "formal_method", "model_checking"]
 [dependencies]
 libc = "0.2.155"
 logic-form = { path = "../logic-form", version = "0.2.7" }
+giputils = { path = "../giputils", version = "0.2.5" }
 
 [build-dependencies]
 cc = "1.0.99"

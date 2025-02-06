@@ -1,8 +1,8 @@
 use crate::{Aig, AigEdge, AigLatch, AigNode};
+use giputils::hash::GHashMap;
 use libc::{fclose, fopen, FILE};
 use logic_form::Lit;
 use std::{
-    collections::HashMap,
     ffi::{c_char, c_void, CStr, CString},
     ptr::null,
 };
@@ -79,7 +79,7 @@ impl Aig {
             id: 0,
             typ: crate::AigNodeType::False,
         });
-        let mut symbols = HashMap::new();
+        let mut symbols = GHashMap::default();
         let inputs: Vec<usize> = (0..aiger.num_inputs)
             .map(|i| unsafe { *aiger.inputs.add(i as usize) })
             .map(|l| {
