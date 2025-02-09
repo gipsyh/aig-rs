@@ -1,6 +1,6 @@
 use crate::{Aig, AigEdge};
 use giputils::hash::{GHashMap, GHashSet};
-use logic_form::{Clause, DagCnf, Lit, Var};
+use logic_form::{DagCnf, Lit, LitVec, Var};
 
 impl Aig {
     #[inline]
@@ -110,7 +110,7 @@ impl Aig {
         ans
     }
 
-    pub fn get_optimized_cnf(&self, logic: &[AigEdge]) -> Vec<Clause> {
+    pub fn get_optimized_cnf(&self, logic: &[AigEdge]) -> Vec<LitVec> {
         let mut latchs = GHashMap::new();
         for l in self.latchs.iter() {
             latchs.insert(l.input, *l);
@@ -136,14 +136,14 @@ impl Aig {
                 if !e.compl() {
                     add_ref(self.nodes[i].fanin0());
                     add_ref(self.nodes[i].fanin1());
-                    ans.push(Clause::from([
+                    ans.push(LitVec::from([
                         Lit::new(self.nodes[i].node_id().into(), false),
                         Lit::new(
                             self.nodes[i].fanin0().node_id().into(),
                             !self.nodes[i].fanin0().compl(),
                         ),
                     ]));
-                    ans.push(Clause::from([
+                    ans.push(LitVec::from([
                         Lit::new(self.nodes[i].node_id().into(), false),
                         Lit::new(
                             self.nodes[i].fanin1().node_id().into(),
@@ -153,7 +153,7 @@ impl Aig {
                 } else {
                     add_ref(!self.nodes[i].fanin0());
                     add_ref(!self.nodes[i].fanin1());
-                    ans.push(Clause::from([
+                    ans.push(LitVec::from([
                         Lit::new(self.nodes[i].node_id().into(), true),
                         Lit::new(
                             self.nodes[i].fanin0().node_id().into(),

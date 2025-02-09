@@ -1,11 +1,11 @@
 use crate::{Aig, AigEdge, AigNodeType};
 use giputils::hash::{GHashMap, GHashSet};
-use logic_form::{Cube, Var};
+use logic_form::{LitVec, Var};
 use std::mem::take;
 
 impl Aig {
-    pub fn latch_init_cube(&self) -> Cube {
-        Cube::from_iter(
+    pub fn latch_init_cube(&self) -> LitVec {
+        LitVec::from_iter(
             self.latchs
                 .iter()
                 .filter_map(|l| l.init.map(|init| AigEdge::new(l.input, !init).to_lit())),
