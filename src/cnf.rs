@@ -1,6 +1,6 @@
 use crate::{Aig, AigEdge};
 use giputils::hash::{GHashMap, GHashSet};
-use logic_form::{DagCnf, Lit, LitVec, Var};
+use logic_form::{DagCnf, Lit, LitVec, LitVvec, Var};
 
 impl Aig {
     #[inline]
@@ -89,7 +89,7 @@ impl Aig {
                     refs.insert(xor1.node_id());
                     let xor0 = xor0.to_lit();
                     let xor1 = xor1.to_lit();
-                    ans.add_xor_rel(n, xor0, xor1);
+                    ans.add_rel(n.var(), &LitVvec::cnf_xor(n, xor0, xor1));
                 } else if let Some((c, t, e)) = self.is_ite(i) {
                     refs.insert(c.node_id());
                     refs.insert(t.node_id());
@@ -97,13 +97,13 @@ impl Aig {
                     let c = c.to_lit();
                     let t = t.to_lit();
                     let e = e.to_lit();
-                    ans.add_ite_rel(n, c, t, e);
+                    ans.add_rel(n.var(), &LitVvec::cnf_ite(n, c, t, e));
                 } else {
                     refs.insert(self.nodes[i].fanin0().id);
                     refs.insert(self.nodes[i].fanin1().id);
                     let fanin0 = self.nodes[i].fanin0().to_lit();
                     let fanin1 = self.nodes[i].fanin1().to_lit();
-                    ans.add_and_rel(n, fanin0, fanin1);
+                    ans.add_rel(n.var(), &LitVvec::cnf_and(n, &[fanin0, fanin1]));
                 }
             }
         }
