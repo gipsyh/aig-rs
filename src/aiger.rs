@@ -1,13 +1,13 @@
 use crate::{Aig, AigEdge, AigLatch, AigNode};
 use giputils::hash::GHashMap;
-use libc::{fclose, fopen, FILE};
+use libc::{FILE, fclose, fopen};
 use logic_form::Lit;
 use std::{
-    ffi::{c_char, c_void, CStr, CString},
+    ffi::{CStr, CString, c_char, c_void},
     ptr::null,
 };
 
-extern "C" {
+unsafe extern "C" {
     fn aiger_init() -> *mut c_void;
     fn aiger_reset(aiger: *mut c_void);
     fn aiger_read_from_file(aiger: *mut c_void, file: *mut FILE) -> *mut c_char;

@@ -171,11 +171,7 @@ impl Aig {
     pub fn merge(&mut self, other: &Aig) {
         let offset = self.num_nodes() - 1;
         let map = |x: usize| {
-            if x == 0 {
-                x
-            } else {
-                x + offset
-            }
+            if x == 0 { x } else { x + offset }
         };
         for i in 1..other.num_nodes() {
             let n = other.nodes[i].map(&map);

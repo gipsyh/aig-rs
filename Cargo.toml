@@ -1,20 +1,20 @@
 [package]
 name = "aig"
-version = "0.2.9"
+version = "0.3.0"
 license = "MIT"
-description = "Rust Aig library"
-edition = "2021"
+description = "Aig library in Rust"
+edition = "2024"
 repository = "https://github.com/gipsyh/aig-rs"
 authors = ["Yuheng Su <gipsyh.icu@gmail.com>"]
-keywords = ["aig", "formal_method", "model_checking"]
+keywords = ["aig", "hardware", "model_checking"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 libc = "0.2.155"
-logic-form = { path = "../logic-form", version = "0.3.0" }
-giputils = { path = "../giputils", version = "0.2.6" }
+logic-form = { path = "../logic-form", version = "0.3.2" }
+giputils = { path = "../giputils", version = "0.3.0" }
 
 [build-dependencies]
 cc = "1.0.99"
-giputils = { path = "../giputils", version = "0.2.5" }
+giputils = { path = "../giputils", version = "0.3.0" }
