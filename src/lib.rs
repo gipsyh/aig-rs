@@ -324,16 +324,23 @@ impl Aig {
         !self.new_and_node(!fanin0, !fanin1)
     }
 
-    pub fn new_ands_node(&mut self, fanin: impl Iterator<Item = AigEdge>) -> AigEdge {
-        let mut res = AigEdge::constant_edge(true);
-        for f in fanin {
-            res = self.new_and_node(res, f);
+    pub fn new_ands_node(&mut self, fanin: impl IntoIterator<Item = AigEdge>) -> AigEdge {
+        let fanin: Vec<_> = fanin.into_iter().collect();
+        if fanin.is_empty() {
+            AigEdge::constant_edge(true)
+        } else if fanin.len() == 1 {
+            fanin[0]
+        } else {
+            let mut res = AigEdge::constant_edge(true);
+            for f in fanin {
+                res = self.new_and_node(res, f);
+            }
+            res
         }
-        res
     }
 
-    pub fn new_ors_node(&mut self, fanin: impl Iterator<Item = AigEdge>) -> AigEdge {
-        !self.new_ands_node(fanin.map(|e| !e))
+    pub fn new_ors_node(&mut self, fanin: impl IntoIterator<Item = AigEdge>) -> AigEdge {
+        !self.new_ands_node(fanin.into_iter().map(|e| !e))
     }
 
     pub fn new_imply_node(&mut self, fanin0: AigEdge, fanin1: AigEdge) -> AigEdge {

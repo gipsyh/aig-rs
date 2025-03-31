@@ -248,7 +248,7 @@ impl Aig {
     pub fn aig_move(&self) -> Self {
         let mut res = self.clone();
         let latch = res.new_leaf_node();
-        let constrains = res.new_ands_node(res.constraints.clone().into_iter());
+        let constrains = res.new_ands_node(res.constraints.clone());
         let next = res.new_and_node(latch.into(), constrains);
         res.add_latch(latch, next, Some(true));
         if !res.bads.is_empty() {
@@ -263,7 +263,7 @@ impl Aig {
 
     pub fn compress_property(&mut self) -> Vec<AigEdge> {
         let b = take(&mut self.bads);
-        let p = self.new_ors_node(b.clone().into_iter());
+        let p = self.new_ors_node(b.clone());
         self.bads.push(p);
         b
     }
