@@ -285,6 +285,7 @@ impl Aig {
         self.latchs.push(AigLatch::new(input, next, init))
     }
 
+    #[inline]
     pub fn trivial_new_and_node(&mut self, fanin0: AigEdge, fanin1: AigEdge) -> AigEdge {
         let nodeid = self.nodes.len();
         let and = AigNode::new_and(nodeid, fanin0, fanin1);
@@ -292,6 +293,7 @@ impl Aig {
         nodeid.into()
     }
 
+    #[inline]
     pub fn new_and_node(&mut self, mut fanin0: AigEdge, mut fanin1: AigEdge) -> AigEdge {
         if fanin0.node_id() > fanin1.node_id() {
             swap(&mut fanin0, &mut fanin1);
@@ -313,15 +315,31 @@ impl Aig {
         } else if fanin0 == !fanin1 {
             AigEdge::constant_edge(false)
         } else {
-            let nodeid = self.nodes.len();
-            let and = AigNode::new_and(nodeid, fanin0, fanin1);
-            self.nodes.push(and);
-            nodeid.into()
+            self.trivial_new_and_node(fanin0, fanin1)
         }
+    }
+
+    pub fn trivial_new_or_node(&mut self, fanin0: AigEdge, fanin1: AigEdge) -> AigEdge {
+        !self.trivial_new_and_node(!fanin0, !fanin1)
     }
 
     pub fn new_or_node(&mut self, fanin0: AigEdge, fanin1: AigEdge) -> AigEdge {
         !self.new_and_node(!fanin0, !fanin1)
+    }
+
+    pub fn trivial_new_ands_node(&mut self, fanin: impl IntoIterator<Item = AigEdge>) -> AigEdge {
+        let fanin: Vec<_> = fanin.into_iter().collect();
+        if fanin.is_empty() {
+            AigEdge::constant_edge(true)
+        } else if fanin.len() == 1 {
+            fanin[0]
+        } else {
+            let mut res = self.trivial_new_and_node(fanin[0], fanin[1]);
+            for &f in &fanin[2..] {
+                res = self.trivial_new_and_node(res, f);
+            }
+            res
+        }
     }
 
     pub fn new_ands_node(&mut self, fanin: impl IntoIterator<Item = AigEdge>) -> AigEdge {
@@ -337,6 +355,10 @@ impl Aig {
             }
             res
         }
+    }
+
+    pub fn trivial_new_ors_node(&mut self, fanin: impl IntoIterator<Item = AigEdge>) -> AigEdge {
+        !self.trivial_new_ands_node(fanin.into_iter().map(|e| !e))
     }
 
     pub fn new_ors_node(&mut self, fanin: impl IntoIterator<Item = AigEdge>) -> AigEdge {
