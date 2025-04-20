@@ -4,6 +4,7 @@ use libc::{FILE, fclose, fopen};
 use logic_form::Lit;
 use std::{
     ffi::{CStr, CString, c_char, c_void},
+    path::Path,
     ptr::null,
 };
 
@@ -156,22 +157,23 @@ impl Aig {
         }
     }
 
-    pub fn from_file(f: &str) -> Self {
-        let file = CString::new(f).unwrap();
+    pub fn from_file<P: AsRef<Path>>(f: P) -> Self {
+        let f = f.as_ref();
+        let file = CString::new(f.to_str().unwrap()).unwrap();
         let mode = CString::new("r").unwrap();
         let file = unsafe { fopen(file.as_ptr(), mode.as_ptr()) };
         if file.is_null() {
-            panic!("error: {f} not found.");
+            panic!("error: {} not found.", f.display());
         }
         let aiger = unsafe { aiger_init() };
         if !unsafe { aiger_read_from_file(aiger, file) }.is_null() {
-            panic!("error: read {f} failed.");
+            panic!("error: read {} failed.", f.display());
         }
         unsafe { fclose(file) };
         Self::from_aiger(aiger)
     }
 
-    pub fn to_file(&self, f: &str, ascii: bool) {
+    pub fn to_file<P: AsRef<Path>>(&self, f: P, ascii: bool) {
         let aiger = unsafe { aiger_init() };
         for i in self.nodes_range() {
             if self.nodes[i].is_and() {
@@ -231,15 +233,16 @@ impl Aig {
         for l in self.constraints.iter() {
             unsafe { aiger_add_constraint(aiger, l.to_lit().into(), null() as _) };
         }
-        let file = CString::new(f).unwrap();
+        let f = f.as_ref();
+        let file = CString::new(f.to_str().unwrap()).unwrap();
         let mode = CString::new("w").unwrap();
         let file = unsafe { fopen(file.as_ptr(), mode.as_ptr()) };
         if file.is_null() {
-            panic!("error: create {f} failed.");
+            panic!("error: create {} failed.", f.display());
         }
         let mode = if ascii { 1 } else { 0 };
         let res = unsafe { aiger_write_to_file(aiger, mode, file) };
-        assert!(res > 0, "write aig to {f} failed");
+        assert!(res > 0, "write aig to {} failed", f.display());
         unsafe { fclose(file) };
     }
 }
