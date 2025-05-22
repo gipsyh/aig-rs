@@ -14,6 +14,8 @@ impl Aig {
             .iter()
             .chain(self.bads.iter())
             .chain(self.outputs.iter())
+            .chain(self.justice.iter().flatten())
+            .chain(self.fairness.iter())
         {
             refs.insert(l.node_id());
         }

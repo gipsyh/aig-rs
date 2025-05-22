@@ -51,6 +51,8 @@ impl Aig {
             .iter()
             .chain(self.outputs.iter())
             .chain(self.bads.iter())
+            .chain(self.justice.iter().flatten())
+            .chain(self.fairness.iter())
             .map(|e| e.node_id())
             .collect();
         let refine = self.coi(&refine_root);
@@ -60,11 +62,7 @@ impl Aig {
         for (i, r) in refine.iter().enumerate() {
             refine_map.insert(r, i);
         }
-        let edge_map = |e: AigEdge| {
-            refine_map
-                .get(&e.id)
-                .map(|new_id| AigEdge::new(*new_id, e.complement))
-        };
+        let edge_map = |e: AigEdge| AigEdge::new(refine_map[&e.id], e.complement);
         let mut nodes = Vec::new();
         let mut remap = GHashMap::new();
         for n in self.nodes.iter() {
@@ -73,8 +71,8 @@ impl Aig {
                 let mut new_node = n.clone();
                 new_node.id = *new_id;
                 if let AigNodeType::And(fanin0, fanin1) = &mut new_node.typ {
-                    *fanin0 = edge_map(*fanin0).unwrap();
-                    *fanin1 = edge_map(*fanin1).unwrap();
+                    *fanin0 = edge_map(*fanin0);
+                    *fanin1 = edge_map(*fanin1);
                 }
                 nodes.push(new_node);
             }
@@ -89,17 +87,19 @@ impl Aig {
             if let Some(new_input) = refine_map.get(&l.input) {
                 let mut new_latch = *l;
                 new_latch.input = *new_input;
-                new_latch.next = edge_map(new_latch.next).unwrap();
+                new_latch.next = edge_map(new_latch.next);
                 latchs.push(new_latch);
             }
         }
-        let outputs: Vec<AigEdge> = self.outputs.iter().filter_map(|n| edge_map(*n)).collect();
-        let bads: Vec<AigEdge> = self.bads.iter().filter_map(|n| edge_map(*n)).collect();
-        let constraints: Vec<AigEdge> = self
-            .constraints
+        let outputs: Vec<AigEdge> = self.outputs.iter().map(|n| edge_map(*n)).collect();
+        let bads: Vec<AigEdge> = self.bads.iter().map(|n| edge_map(*n)).collect();
+        let constraints: Vec<AigEdge> = self.constraints.iter().map(|n| edge_map(*n)).collect();
+        let justice: Vec<Vec<AigEdge>> = self
+            .justice
             .iter()
-            .filter_map(|n| edge_map(*n))
+            .map(|j| j.iter().map(|n| edge_map(*n)).collect())
             .collect();
+        let fairness: Vec<AigEdge> = self.fairness.iter().map(|n| edge_map(*n)).collect();
         let mut symbols = GHashMap::new();
         for (k, s) in self.symbols.iter() {
             if let Some(r) = refine_map.get(k) {
@@ -115,6 +115,8 @@ impl Aig {
                 bads,
                 constraints,
                 symbols,
+                justice,
+                fairness,
             },
             remap,
         )
@@ -158,6 +160,12 @@ impl Aig {
         for c in from.constraints.clone() {
             self.constraints.push(edge_map(c));
         }
+        for j in from.justice.iter() {
+            self.justice.push(j.iter().map(|e| edge_map(*e)).collect());
+        }
+        for f in from.fairness.clone() {
+            self.fairness.push(edge_map(f));
+        }
     }
 
     pub fn unroll_to(&self, k: usize) -> Aig {
@@ -194,6 +202,12 @@ impl Aig {
         }
         for l in other.constraints.iter() {
             self.constraints.push(l.map(&map));
+        }
+        for j in other.justice.iter() {
+            self.justice.push(j.iter().map(|e| e.map(&map)).collect());
+        }
+        for l in other.fairness.iter() {
+            self.fairness.push(l.map(&map));
         }
     }
 
@@ -236,6 +250,12 @@ impl Aig {
         res.outputs = self.outputs.iter().map(|e| edge_map(*e)).collect();
         res.bads = self.bads.iter().map(|e| edge_map(*e)).collect();
         res.constraints = self.constraints.iter().map(|e| edge_map(*e)).collect();
+        res.justice = self
+            .justice
+            .iter()
+            .map(|j| j.iter().map(|e| edge_map(*e)).collect())
+            .collect();
+        res.fairness = self.fairness.iter().map(|e| edge_map(*e)).collect();
         res.symbols = self
             .symbols
             .iter()

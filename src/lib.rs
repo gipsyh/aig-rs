@@ -1,6 +1,5 @@
 mod aiger;
 pub mod cnf;
-mod display;
 mod others;
 mod strash;
 mod ternary;
@@ -232,6 +231,8 @@ pub struct Aig {
     pub outputs: Vec<AigEdge>,
     pub bads: Vec<AigEdge>,
     pub constraints: Vec<AigEdge>,
+    pub justice: Vec<Vec<AigEdge>>,
+    pub fairness: Vec<AigEdge>,
     pub symbols: GHashMap<usize, String>,
 }
 
@@ -247,6 +248,8 @@ impl Aig {
             outputs: Vec::new(),
             bads: Vec::new(),
             constraints: Vec::new(),
+            justice: Vec::new(),
+            fairness: Vec::new(),
             symbols: Default::default(),
         }
     }

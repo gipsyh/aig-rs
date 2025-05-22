@@ -17,6 +17,8 @@ unsafe extern "C" {
     fn aiger_add_output(aiger: *mut c_void, lit: u32, s: *const c_char);
     fn aiger_add_bad(aiger: *mut c_void, lit: u32, s: *const c_char);
     fn aiger_add_constraint(aiger: *mut c_void, lit: u32, s: *const c_char);
+    fn aiger_add_justice(aiger: *mut c_void, size: u32, lits: *mut u32, s: *const c_char);
+    fn aiger_add_fairness(aiger: *mut c_void, lit: u32, s: *const c_char);
     fn aiger_add_and(aiger: *mut c_void, lhs: u32, rhs0: u32, rhs1: u32);
     fn aiger_add_reset(aiger: *mut c_void, lit: u32, reset: u32);
     fn aiger_write_to_file(aiger: *mut c_void, mode: i32, file: *mut FILE) -> i32;
@@ -59,7 +61,7 @@ struct AigerSymbol {
     next: Lit,
     reset: u32,
     size: u32,
-    lits: *mut u32,
+    lits: *mut Lit,
     name: *mut c_char,
 }
 
@@ -123,6 +125,18 @@ impl Aig {
             .map(|i| unsafe { *aiger.constraints.add(i as usize) })
             .map(|l| AigEdge::from_lit(l.lit))
             .collect();
+        let justice: Vec<Vec<AigEdge>> = (0..aiger.num_justice)
+            .map(|i| unsafe { *aiger.justice.add(i as usize) })
+            .map(|l| {
+                (0..l.size)
+                    .map(|j| unsafe { AigEdge::from_lit(*l.lits.add(j as usize)) })
+                    .collect()
+            })
+            .collect();
+        let fairness: Vec<AigEdge> = (0..aiger.num_fairness)
+            .map(|i| unsafe { *aiger.fairness.add(i as usize) })
+            .map(|l| AigEdge::from_lit(l.lit))
+            .collect();
         for i in inputs.iter() {
             nodes_remaining[*i].write(AigNode {
                 id: *i,
@@ -154,6 +168,8 @@ impl Aig {
             bads,
             constraints,
             symbols,
+            justice,
+            fairness,
         }
     }
 
@@ -232,6 +248,19 @@ impl Aig {
         }
         for l in self.constraints.iter() {
             unsafe { aiger_add_constraint(aiger, l.to_lit().into(), null() as _) };
+        }
+        for j in self.justice.iter() {
+            unsafe {
+                aiger_add_justice(
+                    aiger,
+                    j.len() as _,
+                    j.as_slice().as_ptr() as *mut u32,
+                    null() as _,
+                );
+            }
+        }
+        for l in self.fairness.iter() {
+            unsafe { aiger_add_fairness(aiger, l.to_lit().into(), null() as _) };
         }
         let f = f.as_ref();
         let file = CString::new(f.to_str().unwrap()).unwrap();
