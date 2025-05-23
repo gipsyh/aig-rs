@@ -60,7 +60,7 @@ impl Aig {
         refine.sort();
         let mut refine_map = GHashMap::new();
         for (i, r) in refine.iter().enumerate() {
-            refine_map.insert(r, i);
+            refine_map.insert(*r, i);
         }
         let edge_map = |e: AigEdge| AigEdge::new(refine_map[&e.id], e.complement);
         let mut nodes = Vec::new();
