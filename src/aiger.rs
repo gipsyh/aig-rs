@@ -250,6 +250,7 @@ impl Aig {
             unsafe { aiger_add_constraint(aiger, l.to_lit().into(), null() as _) };
         }
         for j in self.justice.iter() {
+            let j: Vec<_> = j.iter().map(|e| e.to_lit()).collect();
             unsafe {
                 aiger_add_justice(
                     aiger,
