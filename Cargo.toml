@@ -1,6 +1,6 @@
 [package]
 name = "aig"
-version = "0.4.0"
+version = "0.4.1"
 license = "MIT"
 description = "Aig library in Rust"
 edition = "2024"
