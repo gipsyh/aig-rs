@@ -1,6 +1,6 @@
 use crate::{Aig, AigEdge, AigNodeType};
 use giputils::hash::{GHashMap, GHashSet};
-use logic_form::{LitVec, Var};
+use logic_form::{LitVec, Var, VarVMap};
 use std::mem::take;
 
 impl Aig {
@@ -45,7 +45,7 @@ impl Aig {
         refine
     }
 
-    pub fn coi_refine(&self) -> (Aig, GHashMap<Var, Var>) {
+    pub fn coi_refine(&self) -> (Aig, VarVMap) {
         let refine_root: Vec<usize> = self
             .constraints
             .iter()
@@ -64,10 +64,10 @@ impl Aig {
         }
         let edge_map = |e: AigEdge| AigEdge::new(refine_map[&e.id], e.complement);
         let mut nodes = Vec::new();
-        let mut remap = GHashMap::new();
+        let mut restore = VarVMap::new();
         for n in self.nodes.iter() {
             if let Some(new_id) = refine_map.get(&n.node_id()) {
-                remap.insert(Var::new(*new_id), Var::new(n.node_id()));
+                restore.insert(Var::new(*new_id), Var::new(n.node_id()));
                 let mut new_node = n.clone();
                 new_node.id = *new_id;
                 if let AigNodeType::And(fanin0, fanin1) = &mut new_node.typ {
@@ -118,7 +118,7 @@ impl Aig {
                 justice,
                 fairness,
             },
-            remap,
+            restore,
         )
     }
 
