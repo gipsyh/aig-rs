@@ -46,7 +46,7 @@ impl Aig {
     }
 
     pub fn coi_refine(&self) -> (Aig, VarVMap) {
-        let refine_root: Vec<usize> = self
+        let mut refine_root: Vec<usize> = self
             .constraints
             .iter()
             .chain(self.outputs.iter())
@@ -55,6 +55,9 @@ impl Aig {
             .chain(self.fairness.iter())
             .map(|e| e.node_id())
             .collect();
+        if !self.justice.is_empty() || !self.fairness.is_empty() {
+            refine_root.extend(self.latchs.iter().map(|e| e.input));
+        }
         let refine = self.coi(&refine_root);
         let mut refine = Vec::from_iter(refine);
         refine.sort();
