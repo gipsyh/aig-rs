@@ -81,7 +81,7 @@ impl AigEdge {
     }
 
     #[inline]
-    pub fn constant_edge(polarity: bool) -> Self {
+    pub fn constant(polarity: bool) -> Self {
         AigEdge {
             id: 0,
             complement: polarity,
@@ -89,8 +89,29 @@ impl AigEdge {
     }
 
     #[inline]
+    pub fn is_const(&self) -> bool {
+        self.id == 0
+    }
+
+    #[inline]
     pub fn is_constant(&self, polarity: bool) -> bool {
-        *self == Self::constant_edge(polarity)
+        *self == Self::constant(polarity)
+    }
+
+    #[inline]
+    pub fn try_to_constant(self) -> Option<bool> {
+        if self.is_constant(true) {
+            Some(true)
+        } else if self.is_constant(false) {
+            Some(false)
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    pub fn to_constant(self) -> bool {
+        self.try_to_constant().unwrap()
     }
 
     #[inline]
@@ -301,22 +322,22 @@ impl Aig {
         if fanin0.node_id() > fanin1.node_id() {
             swap(&mut fanin0, &mut fanin1);
         }
-        if fanin0 == AigEdge::constant_edge(true) {
+        if fanin0 == AigEdge::constant(true) {
             return fanin1;
         }
-        if fanin0 == AigEdge::constant_edge(false) {
-            return AigEdge::constant_edge(false);
+        if fanin0 == AigEdge::constant(false) {
+            return AigEdge::constant(false);
         }
-        if fanin1 == AigEdge::constant_edge(true) {
+        if fanin1 == AigEdge::constant(true) {
             return fanin0;
         }
-        if fanin1 == AigEdge::constant_edge(false) {
-            return AigEdge::constant_edge(false);
+        if fanin1 == AigEdge::constant(false) {
+            return AigEdge::constant(false);
         }
         if fanin0 == fanin1 {
             fanin0
         } else if fanin0 == !fanin1 {
-            AigEdge::constant_edge(false)
+            AigEdge::constant(false)
         } else {
             self.trivial_new_and_node(fanin0, fanin1)
         }
@@ -333,7 +354,7 @@ impl Aig {
     pub fn trivial_new_ands_node(&mut self, fanin: impl IntoIterator<Item = AigEdge>) -> AigEdge {
         let fanin: Vec<_> = fanin.into_iter().collect();
         if fanin.is_empty() {
-            AigEdge::constant_edge(true)
+            AigEdge::constant(true)
         } else if fanin.len() == 1 {
             fanin[0]
         } else {
@@ -348,11 +369,11 @@ impl Aig {
     pub fn new_ands_node(&mut self, fanin: impl IntoIterator<Item = AigEdge>) -> AigEdge {
         let fanin: Vec<_> = fanin.into_iter().collect();
         if fanin.is_empty() {
-            AigEdge::constant_edge(true)
+            AigEdge::constant(true)
         } else if fanin.len() == 1 {
             fanin[0]
         } else {
-            let mut res = AigEdge::constant_edge(true);
+            let mut res = AigEdge::constant(true);
             for f in fanin {
                 res = self.new_and_node(res, f);
             }
