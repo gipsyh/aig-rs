@@ -1,17 +1,9 @@
 use crate::{Aig, AigEdge, AigNodeType};
 use giputils::hash::{GHashMap, GHashSet};
-use logic_form::{LitVec, Var, VarVMap};
+use logic_form::{Var, VarVMap};
 use std::mem::take;
 
 impl Aig {
-    pub fn latch_init_cube(&self) -> LitVec {
-        LitVec::from_iter(
-            self.latchs
-                .iter()
-                .filter_map(|l| l.init.map(|init| AigEdge::new(l.input, !init).to_lit())),
-        )
-    }
-
     pub fn coi(&self, root: &[usize]) -> GHashSet<usize> {
         let mut latchs = GHashMap::new();
         for l in self.latchs.iter() {
@@ -273,7 +265,7 @@ impl Aig {
         let latch = res.new_leaf_node();
         let constrains = res.new_ands_node(res.constraints.clone());
         let next = res.new_and_node(latch.into(), constrains);
-        res.add_latch(latch, next, Some(true));
+        res.add_latch(latch, next, Some(AigEdge::constant_edge(true)));
         if !res.bads.is_empty() {
             res.bads[0] = res.new_and_node(next, res.bads[0]);
         }

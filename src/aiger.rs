@@ -59,7 +59,7 @@ struct Aiger {
 struct AigerSymbol {
     lit: Lit,
     next: Lit,
-    reset: u32,
+    reset: Lit,
     size: u32,
     lits: *mut Lit,
     name: *mut c_char,
@@ -104,14 +104,17 @@ impl Aig {
                 let symbol = symbol.to_str().unwrap();
                 symbols.insert(id, symbol.to_string());
             }
-            let init = if l.reset <= 1 {
-                Some(l.reset != 0)
-            } else if l.reset == l.lit.into() {
+            let init = if l.reset.var() == l.lit.var() {
+                assert!(l.reset == l.lit);
                 None
             } else {
-                panic!()
+                Some(AigEdge::from_lit(l.reset))
             };
-            latchs.push(AigLatch::new(id, AigEdge::from_lit(l.next), init));
+            latchs.push(AigLatch {
+                input: id,
+                next: AigEdge::from_lit(l.next),
+                init,
+            });
         }
         let outputs: Vec<AigEdge> = (0..aiger.num_outputs)
             .map(|i| unsafe { *aiger.outputs.add(i as usize) })
@@ -233,12 +236,12 @@ impl Aig {
             let lit = AigEdge::from(self.nodes[l.input].id).to_lit();
             unsafe { aiger_add_latch(aiger, lit.into(), l.next.to_lit().into(), s as _) };
             drop(cs);
-            let reset: u32 = if let Some(i) = l.init {
-                i.into()
+            let reset: Lit = if let Some(i) = l.init {
+                i.to_lit()
             } else {
-                lit.into()
+                lit
             };
-            unsafe { aiger_add_reset(aiger, lit.into(), reset) };
+            unsafe { aiger_add_reset(aiger, lit.into(), reset.into()) };
         }
         for l in self.outputs.iter() {
             unsafe { aiger_add_output(aiger, l.to_lit().into(), null() as _) };

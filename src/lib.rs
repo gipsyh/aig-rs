@@ -122,11 +122,11 @@ impl AigEdge {
 pub struct AigLatch {
     pub input: usize,
     pub next: AigEdge,
-    pub init: Option<bool>,
+    pub init: Option<AigEdge>,
 }
 
 impl AigLatch {
-    pub fn new(input: usize, next: AigEdge, init: Option<bool>) -> Self {
+    pub fn new(input: usize, next: AigEdge, init: Option<AigEdge>) -> Self {
         Self { input, next, init }
     }
 }
@@ -277,14 +277,14 @@ impl Aig {
     }
 
     #[inline]
-    pub fn new_latch(&mut self, next: AigEdge, init: Option<bool>) -> usize {
+    pub fn new_latch(&mut self, next: AigEdge, init: Option<AigEdge>) -> usize {
         let input = self.new_leaf_node();
         self.latchs.push(AigLatch::new(input, next, init));
         input
     }
 
     #[inline]
-    pub fn add_latch(&mut self, input: usize, next: AigEdge, init: Option<bool>) {
+    pub fn add_latch(&mut self, input: usize, next: AigEdge, init: Option<AigEdge>) {
         self.latchs.push(AigLatch::new(input, next, init))
     }
 
