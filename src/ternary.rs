@@ -1,5 +1,5 @@
 use crate::{Aig, AigEdge};
-use logic_form::Lbool;
+use logicrs::Lbool;
 
 impl Aig {
     pub fn ternary_simulate(&self, input: &[Lbool], state: &[Lbool]) -> Vec<Lbool> {

@@ -5,7 +5,7 @@ mod strash;
 mod ternary;
 
 use giputils::hash::GHashMap;
-use logic_form::Lit;
+use logicrs::Lit;
 use std::{
     mem::swap,
     ops::{Index, Not, Range},

@@ -1,6 +1,6 @@
 use crate::{Aig, AigEdge, AigNodeType};
 use giputils::hash::{GHashMap, GHashSet};
-use logic_form::{Var, VarVMap};
+use logicrs::{Var, VarVMap};
 use std::mem::take;
 
 impl Aig {

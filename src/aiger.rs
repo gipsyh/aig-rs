@@ -1,7 +1,7 @@
 use crate::{Aig, AigEdge, AigLatch, AigNode};
 use giputils::hash::GHashMap;
 use libc::{FILE, fclose, fopen};
-use logic_form::Lit;
+use logicrs::Lit;
 use std::{
     ffi::{CStr, CString, c_char, c_void},
     path::Path,

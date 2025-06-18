@@ -1,6 +1,6 @@
 use crate::{Aig, AigEdge};
 use giputils::hash::GHashSet;
-use logic_form::{DagCnf, LitVvec, Var};
+use logicrs::{DagCnf, LitVvec, Var};
 
 impl Aig {
     #[inline]
