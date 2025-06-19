@@ -1,9 +1,10 @@
 use crate::{Aig, AigEdge, AigLatch, AigNode};
 use giputils::hash::GHashMap;
-use libc::{FILE, fclose, fopen};
+use libc::{FILE, c_int, fclose, fopen};
 use logicrs::Lit;
 use std::{
     ffi::{CStr, CString, c_char, c_void},
+    fmt::{self, Display, Write},
     path::Path,
     ptr::null,
 };
@@ -22,6 +23,13 @@ unsafe extern "C" {
     fn aiger_add_and(aiger: *mut c_void, lhs: u32, rhs0: u32, rhs1: u32);
     fn aiger_add_reset(aiger: *mut c_void, lit: u32, reset: u32);
     fn aiger_write_to_file(aiger: *mut c_void, mode: i32, file: *mut FILE) -> i32;
+    fn aiger_write_generic(
+        aiger: *mut c_void,
+        mode: i32,
+        state: *mut c_void,
+        aiger_put: unsafe extern "C" fn(c_char, *mut c_void) -> c_int,
+    ) -> i32;
+
 }
 
 #[repr(C)]
@@ -176,23 +184,7 @@ impl Aig {
         }
     }
 
-    pub fn from_file<P: AsRef<Path>>(f: P) -> Self {
-        let f = f.as_ref();
-        let file = CString::new(f.to_str().unwrap()).unwrap();
-        let mode = CString::new("r").unwrap();
-        let file = unsafe { fopen(file.as_ptr(), mode.as_ptr()) };
-        if file.is_null() {
-            panic!("error: {} not found.", f.display());
-        }
-        let aiger = unsafe { aiger_init() };
-        if !unsafe { aiger_read_from_file(aiger, file) }.is_null() {
-            panic!("error: read {} failed.", f.display());
-        }
-        unsafe { fclose(file) };
-        Self::from_aiger(aiger)
-    }
-
-    pub fn to_file<P: AsRef<Path>>(&self, f: P, ascii: bool) {
+    fn to_aiger(&self) -> *mut Aiger {
         let aiger = unsafe { aiger_init() };
         for i in self.nodes_range() {
             if self.nodes[i].is_and() {
@@ -266,6 +258,27 @@ impl Aig {
         for l in self.fairness.iter() {
             unsafe { aiger_add_fairness(aiger, l.to_lit().into(), null() as _) };
         }
+        aiger as _
+    }
+
+    pub fn from_file<P: AsRef<Path>>(f: P) -> Self {
+        let f = f.as_ref();
+        let file = CString::new(f.to_str().unwrap()).unwrap();
+        let mode = CString::new("r").unwrap();
+        let file = unsafe { fopen(file.as_ptr(), mode.as_ptr()) };
+        if file.is_null() {
+            panic!("error: {} not found.", f.display());
+        }
+        let aiger = unsafe { aiger_init() };
+        if !unsafe { aiger_read_from_file(aiger, file) }.is_null() {
+            panic!("error: read {} failed.", f.display());
+        }
+        unsafe { fclose(file) };
+        Self::from_aiger(aiger)
+    }
+
+    pub fn to_file<P: AsRef<Path>>(&self, f: P, ascii: bool) {
+        let aiger = self.to_aiger();
         let f = f.as_ref();
         let file = CString::new(f.to_str().unwrap()).unwrap();
         let mode = CString::new("w").unwrap();
@@ -274,8 +287,39 @@ impl Aig {
             panic!("error: create {} failed.", f.display());
         }
         let mode = if ascii { 1 } else { 0 };
-        let res = unsafe { aiger_write_to_file(aiger, mode, file) };
+        let res = unsafe { aiger_write_to_file(aiger as _, mode, file) };
         assert!(res > 0, "write aig to {} failed", f.display());
         unsafe { fclose(file) };
+    }
+}
+
+unsafe extern "C" fn aiger_put(ch: c_char, state: *mut c_void) -> c_int {
+    let pc = unsafe { &mut *(state as *mut fmt::Formatter) };
+    pc.write_char(ch as u8 as char).unwrap();
+    ch as c_int
+}
+
+impl Display for Aig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+        let aiger = self.to_aiger();
+        if unsafe { aiger_write_generic(aiger as _, 1, f as *mut _ as _, aiger_put) } > 0 {
+            Ok(())
+        } else {
+            Err(fmt::Error)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test() {
+        let mut aig = Aig::new();
+        let i0: AigEdge = aig.new_input().into();
+        let i1: AigEdge = aig.new_input().into();
+        aig.new_and_node(i0, i1);
+        println!("{aig}");
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "aig"
-version = "0.4.3"
+version = "0.4.4"
 license = "MIT"
 description = "Aig library in Rust"
 edition = "2024"
@@ -14,6 +14,7 @@ keywords = ["aig", "hardware", "model_checking"]
 libc = "0.2.155"
 logicrs = { path = "../logicrs", version = "0.5.0" }
 giputils = { path = "../giputils", version = "0.3.3" }
+serde = "1.0.219"
 
 [build-dependencies]
 cc = "1.0.99"
