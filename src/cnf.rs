@@ -8,6 +8,9 @@ impl Aig {
         let mut refs = GHashSet::new();
         for l in self.latchs.iter() {
             refs.insert(l.next.node_id());
+            if let Some(init) = &l.init {
+                refs.insert(init.node_id());
+            }
         }
         for l in self
             .constraints

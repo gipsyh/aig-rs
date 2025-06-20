@@ -92,6 +92,9 @@ impl Aig {
                 let mut new_latch = *l;
                 new_latch.input = *new_input;
                 new_latch.next = edge_map(new_latch.next);
+                if let Some(init) = &mut new_latch.init {
+                    *init = edge_map(*init);
+                }
                 latchs.push(new_latch);
             }
         }
