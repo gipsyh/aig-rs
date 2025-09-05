@@ -290,7 +290,9 @@ impl Aig {
         let res = unsafe { aiger_write_to_file(aiger as _, mode, file) };
         assert!(res > 0, "write aig to {} failed", f.display());
         unsafe { fclose(file) };
-        unsafe { aiger_reset(aiger as _); }
+        unsafe {
+            aiger_reset(aiger as _);
+        }
     }
 }
 
@@ -304,12 +306,10 @@ impl Display for Aig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
         let aiger = self.to_aiger();
         let res = unsafe { aiger_write_generic(aiger as _, 1, f as *mut _ as _, aiger_put) };
-        unsafe { aiger_reset(aiger as _); }
-        if res > 0 {
-            Ok(())
-        } else {
-            Err(fmt::Error)
+        unsafe {
+            aiger_reset(aiger as _);
         }
+        if res > 0 { Ok(()) } else { Err(fmt::Error) }
     }
 }
 
