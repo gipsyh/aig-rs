@@ -1,6 +1,6 @@
 [package]
 name = "aig"
-version = "0.4.6"
+version = "0.5.0"
 license = "MIT"
 description = "Aig library in Rust"
 edition = "2024"
@@ -11,11 +11,10 @@ keywords = ["aig", "hardware", "model_checking"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-libc = "0.2.155"
 logicrs = { path = "../logicrs", version = "0.6.0" }
 giputils = { path = "../giputils", version = "0.3.5" }
-serde = "1.0.219"
 
-[build-dependencies]
-cc = "1.0.99"
-giputils = { path = "../giputils", version = "0.3.5" }
+[profile.release]
+lto = true
+panic = "abort"
+strip = true

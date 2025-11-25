@@ -408,9 +408,7 @@ impl Aig {
     pub fn set_symbol(&mut self, id: usize, s: &str) {
         self.symbols.insert(id, s.to_string());
     }
-}
 
-impl Aig {
     pub fn num_nodes(&self) -> usize {
         self.nodes.len()
     }
