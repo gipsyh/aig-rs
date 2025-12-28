@@ -1,6 +1,8 @@
 extern crate cc;
 
-fn main() -> Result<(), String> {
+use std::io;
+
+fn main() -> io::Result<()> {
     giputils::build::git_submodule_update()?;
     println!("cargo:rerun-if-changed=./aiger");
     cc::Build::new()
