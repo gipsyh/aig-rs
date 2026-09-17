@@ -1,7 +1,7 @@
 use crate::{Aig, AigEdge, AigLatch, AigNode};
 use giputils::hash::GHashMap;
 use libc::{FILE, c_int, fclose, fopen};
-use logicrs::Lit;
+use logicrs::{Lit, Var};
 use std::{
     ffi::{CStr, CString, c_char, c_void},
     fmt::{self, Display, Write},
@@ -87,7 +87,6 @@ impl Aig {
         let mut nodes: Vec<AigNode> = Vec::with_capacity(node_len);
         let nodes_remaining = nodes.spare_capacity_mut();
         nodes_remaining[0].write(AigNode {
-            id: 0,
             typ: crate::AigNodeType::False,
         });
         let mut symbols = GHashMap::default();
@@ -150,13 +149,11 @@ impl Aig {
             .collect();
         for i in inputs.iter() {
             nodes_remaining[*i].write(AigNode {
-                id: *i,
                 typ: crate::AigNodeType::Leaf,
             });
         }
         for l in latchs.iter() {
             nodes_remaining[l.input].write(AigNode {
-                id: l.input,
                 typ: crate::AigNodeType::Leaf,
             });
         }
@@ -164,7 +161,6 @@ impl Aig {
             let a = unsafe { &*aiger.ands.add(i as usize) };
             let id: usize = a.lhs.var().into();
             nodes_remaining[id].write(AigNode::new_and(
-                id,
                 AigEdge::from_lit(a.rhs0),
                 AigEdge::from_lit(a.rhs1),
             ));
@@ -193,7 +189,7 @@ impl Aig {
                 unsafe {
                     aiger_add_and(
                         aiger,
-                        AigEdge::from(self.nodes[i].id).to_lit().into(),
+                        Var::new(i).lit().into(),
                         fanin1.into(),
                         fanin0.into(),
                     )
@@ -202,30 +198,24 @@ impl Aig {
         }
         for i in self.inputs.iter() {
             let mut cs = CString::default();
-            let s = if let Some(s) = self.get_symbol(self.nodes[*i].id) {
+            let s = if let Some(s) = self.get_symbol(*i) {
                 cs = CString::new(s).unwrap();
                 cs.as_ptr()
             } else {
                 null()
             };
-            unsafe {
-                aiger_add_input(
-                    aiger,
-                    AigEdge::from(self.nodes[*i].id).to_lit().into(),
-                    s as _,
-                )
-            };
+            unsafe { aiger_add_input(aiger, Var::new(*i).lit().into(), s as _) };
             drop(cs);
         }
         for l in self.latchs.iter() {
             let mut cs = CString::default();
-            let s = if let Some(s) = self.get_symbol(self.nodes[l.input].id) {
+            let s = if let Some(s) = self.get_symbol(l.input) {
                 cs = CString::new(s).unwrap();
                 cs.as_ptr()
             } else {
                 null()
             };
-            let lit = AigEdge::from(self.nodes[l.input].id).to_lit();
+            let lit = Var::new(l.input).lit();
             unsafe { aiger_add_latch(aiger, lit.into(), l.next.to_lit().into(), s as _) };
             drop(cs);
             let reset: Lit = if let Some(i) = l.init {

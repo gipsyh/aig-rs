@@ -83,12 +83,12 @@ impl Aig {
     pub fn cnf(&self, optimize: bool) -> DagCnf {
         let mut refs = self.get_root_refs();
         let mut ans = DagCnf::new();
-        for node in self.nodes.iter().skip(1) {
-            assert_eq!(Var::new(node.node_id()), ans.new_var());
+        for (id, _) in self.nodes.iter().enumerate().skip(1) {
+            assert_eq!(Var::new(id), ans.new_var());
         }
         for i in self.nodes_range().rev() {
             if self.nodes[i].is_and() && (refs.contains(&i)) {
-                let n = Var::new(self.nodes[i].node_id()).lit();
+                let n = Var::new(i).lit();
                 if optimize {
                     if let Some((xor0, xor1)) = self.is_xor(i) {
                         refs.insert(xor0.node_id());

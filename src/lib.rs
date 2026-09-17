@@ -150,15 +150,10 @@ pub enum AigNodeType {
 
 #[derive(Debug, Clone)]
 pub struct AigNode {
-    id: usize,
     typ: AigNodeType,
 }
 
 impl AigNode {
-    pub fn node_id(&self) -> usize {
-        self.id
-    }
-
     pub fn is_and(&self) -> bool {
         matches!(self.typ, AigNodeType::And(_, _))
     }
@@ -212,7 +207,6 @@ impl AigNode {
         M: Fn(usize) -> usize,
     {
         let mut res = self.clone();
-        res.id = map(res.id);
         if let AigNodeType::And(fanin0, fanin1) = &mut res.typ {
             *fanin0 = fanin0.map(map);
             *fanin1 = fanin1.map(map);
@@ -222,12 +216,11 @@ impl AigNode {
 }
 
 impl AigNode {
-    fn new_and(id: usize, mut fanin0: AigEdge, mut fanin1: AigEdge) -> Self {
+    fn new_and(mut fanin0: AigEdge, mut fanin1: AigEdge) -> Self {
         if fanin0.node_id() > fanin1.node_id() {
             swap(&mut fanin0, &mut fanin1);
         }
         Self {
-            id,
             typ: AigNodeType::And(fanin0, fanin1),
         }
     }
@@ -250,7 +243,6 @@ impl Aig {
     pub fn new() -> Self {
         Self {
             nodes: vec![AigNode {
-                id: 0,
                 typ: AigNodeType::False,
             }],
             inputs: Vec::new(),
@@ -267,7 +259,6 @@ impl Aig {
     pub fn new_leaf_node(&mut self) -> usize {
         let id = self.nodes.len();
         let leaf = AigNode {
-            id,
             typ: AigNodeType::Leaf,
         };
         self.nodes.push(leaf);
@@ -301,7 +292,7 @@ impl Aig {
     #[inline]
     pub fn trivial_new_and_node(&mut self, fanin0: AigEdge, fanin1: AigEdge) -> AigEdge {
         let nodeid = self.nodes.len();
-        let and = AigNode::new_and(nodeid, fanin0, fanin1);
+        let and = AigNode::new_and(fanin0, fanin1);
         self.nodes.push(and);
         nodeid.into()
     }

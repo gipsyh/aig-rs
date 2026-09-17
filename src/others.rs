@@ -69,11 +69,10 @@ impl Aig {
         let edge_map = |e: AigEdge| e.map(&|id| refine_map[&id]);
         let mut nodes = Vec::new();
         let mut restore = VarVMap::new();
-        for n in self.nodes.iter() {
-            if let Some(new_id) = refine_map.get(&n.node_id()) {
-                restore.insert(Var::new(*new_id), Var::new(n.node_id()));
+        for (id, n) in self.nodes.iter().enumerate() {
+            if let Some(new_id) = refine_map.get(&id) {
+                restore.insert(Var::new(*new_id), Var::new(id));
                 let mut new_node = n.clone();
-                new_node.id = *new_id;
                 if let AigNodeType::And(fanin0, fanin1) = &mut new_node.typ {
                     *fanin0 = edge_map(*fanin0);
                     *fanin1 = edge_map(*fanin1);

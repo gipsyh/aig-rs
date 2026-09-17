@@ -6,7 +6,7 @@ impl Aig {
     pub fn strash(&self) -> Self {
         let mut map = GHashMap::new();
         let mut strash_map = GHashMap::new();
-        for node in self.nodes.iter() {
+        for (id, node) in self.nodes.iter().enumerate() {
             if node.is_and() {
                 let mut fanin0 = node.fanin0();
                 if let Some(eq) = strash_map.get(&fanin0.node_id()) {
@@ -21,10 +21,10 @@ impl Aig {
                 }
                 match map.get(&(fanin0, fanin1)) {
                     Some(eq) => {
-                        strash_map.insert(node.node_id(), *eq);
+                        strash_map.insert(id, *eq);
                     }
                     None => {
-                        map.insert((fanin0, fanin1), node.id);
+                        map.insert((fanin0, fanin1), id);
                     }
                 }
             }
