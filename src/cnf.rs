@@ -109,11 +109,14 @@ impl Aig {
                         continue;
                     }
                 }
-                refs.insert(self.nodes[i].fanin0().id);
-                refs.insert(self.nodes[i].fanin1().id);
-                let fanin0 = self.nodes[i].fanin0().to_lit();
-                let fanin1 = self.nodes[i].fanin1().to_lit();
-                ans.add_rel(n.var(), &LitVvec::cnf_and(n, &[fanin0, fanin1]));
+                let fanin0 = self.nodes[i].fanin0();
+                let fanin1 = self.nodes[i].fanin1();
+                refs.insert(fanin0.node_id());
+                refs.insert(fanin1.node_id());
+                ans.add_rel(
+                    n.var(),
+                    &LitVvec::cnf_and(n, &[fanin0.to_lit(), fanin1.to_lit()]),
+                );
             }
         }
         ans

@@ -66,7 +66,7 @@ impl Aig {
         for (i, r) in refine.iter().enumerate() {
             refine_map.insert(*r, i);
         }
-        let edge_map = |e: AigEdge| AigEdge::new(refine_map[&e.id], e.complement);
+        let edge_map = |e: AigEdge| e.map(&|id| refine_map[&id]);
         let mut nodes = Vec::new();
         let mut restore = VarVMap::new();
         for n in self.nodes.iter() {
@@ -238,7 +238,7 @@ impl Aig {
             }
         }
         assert!(max_id + 1 == self.nodes.len());
-        let edge_map = |e: AigEdge| AigEdge::new(encode_map[&e.node_id()], e.compl());
+        let edge_map = |e: AigEdge| e.map(&|id| encode_map[&id]);
         for l in self.inputs.iter() {
             let nl = res.new_input();
             assert!(nl == encode_map[l]);

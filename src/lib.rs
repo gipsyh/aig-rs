@@ -5,108 +5,103 @@ mod strash;
 mod ternary;
 
 use giputils::hash::GHashMap;
-use logicrs::Lit;
+use logicrs::{Lit, Var};
 use std::{
+    fmt,
     mem::swap,
     ops::{Index, Not, Range},
     vec,
 };
 pub use ternary::*;
 
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
-pub struct AigEdge {
-    id: usize,
-    complement: bool,
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
+pub struct AigEdge(Lit);
+
+impl fmt::Debug for AigEdge {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
 }
 
 impl Not for AigEdge {
     type Output = AigEdge;
 
-    fn not(mut self) -> Self::Output {
-        self.complement = !self.complement;
-        self
+    #[inline]
+    fn not(self) -> Self::Output {
+        Self(!self.0)
     }
 }
 
 impl From<usize> for AigEdge {
+    #[inline]
     fn from(value: usize) -> Self {
-        Self {
-            id: value,
-            complement: false,
-        }
+        Self(Var::new(value).lit())
     }
 }
 
 impl PartialOrd for AigEdge {
+    #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
 impl Ord for AigEdge {
+    #[inline]
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.id.cmp(&other.id)
+        self.node_id().cmp(&other.node_id())
     }
 }
 
 impl AigEdge {
     #[inline]
     pub fn new(id: usize, complement: bool) -> Self {
-        Self { id, complement }
+        Self(Lit::new(Var::new(id), !complement))
     }
 
     #[inline]
     pub fn node_id(&self) -> usize {
-        self.id
+        self.0.var().into()
     }
 
     #[inline]
     pub fn compl(&self) -> bool {
-        self.complement
+        !self.0.polarity()
     }
 
     #[inline]
     pub fn set_nodeid(&mut self, nodeid: usize) {
-        self.id = nodeid;
+        self.0 = Lit::new(Var::new(nodeid), self.0.polarity());
     }
 
     #[inline]
     pub fn set_compl(&mut self, compl: bool) {
-        self.complement = compl
+        self.0 = Lit::new(self.0.var(), !compl)
     }
 
     #[inline]
     pub fn not_if(self, x: bool) -> Self {
-        if x { !self } else { self }
+        Self(self.0.not_if(x))
     }
 
     #[inline]
     pub fn constant(polarity: bool) -> Self {
-        AigEdge {
-            id: 0,
-            complement: polarity,
-        }
+        Self(Lit::constant(polarity))
     }
 
     #[inline]
     pub fn is_const(&self) -> bool {
-        self.id == 0
+        self.0.var().is_constant()
     }
 
     #[inline]
     pub fn is_constant(&self, polarity: bool) -> bool {
-        *self == Self::constant(polarity)
+        self.0.is_constant(polarity)
     }
 
     #[inline]
     pub fn try_to_constant(self) -> Option<bool> {
-        if self.is_constant(true) {
-            Some(true)
-        } else if self.is_constant(false) {
-            Some(false)
-        } else {
-            None
-        }
+        self.0.try_constant()
     }
 
     #[inline]
@@ -116,15 +111,12 @@ impl AigEdge {
 
     #[inline]
     pub fn from_lit(lit: Lit) -> Self {
-        Self {
-            id: lit.var().into(),
-            complement: !lit.polarity(),
-        }
+        Self(lit)
     }
 
     #[inline]
     pub fn to_lit(&self) -> Lit {
-        Lit::new(self.id.into(), !self.complement)
+        self.0
     }
 
     #[inline]
@@ -132,10 +124,7 @@ impl AigEdge {
     where
         M: Fn(usize) -> usize,
     {
-        Self {
-            id: map(self.id),
-            complement: self.complement,
-        }
+        Self(self.0.map_var(|v| Var::new(map(v.into()))))
     }
 }
 

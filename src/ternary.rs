@@ -46,7 +46,7 @@ impl<'a> TernarySimulate<'a> {
         self.value = self.aig.ternary_simulate(&input, &self.state);
         for i in 0..self.aig.latchs.len() {
             let ln = self.aig.latchs[i].next;
-            self.state[i] = self.value[ln.id].not_if(ln.compl());
+            self.state[i] = self.value[ln.node_id()].not_if(ln.compl());
         }
     }
 
