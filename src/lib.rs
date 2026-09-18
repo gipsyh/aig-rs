@@ -46,6 +46,20 @@ impl From<Var> for AigEdge {
     }
 }
 
+impl From<Lit> for AigEdge {
+    #[inline]
+    fn from(value: Lit) -> Self {
+        Self(value)
+    }
+}
+
+impl From<AigEdge> for Lit {
+    #[inline]
+    fn from(value: AigEdge) -> Self {
+        value.0
+    }
+}
+
 impl PartialOrd for AigEdge {
     #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
@@ -114,16 +128,6 @@ impl AigEdge {
     #[inline]
     pub fn to_constant(self) -> bool {
         self.try_to_constant().unwrap()
-    }
-
-    #[inline]
-    pub fn from_lit(lit: Lit) -> Self {
-        Self(lit)
-    }
-
-    #[inline]
-    pub fn to_lit(&self) -> Lit {
-        self.0
     }
 
     #[inline]

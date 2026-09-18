@@ -93,8 +93,8 @@ impl Aig {
                     if let Some((xor0, xor1)) = self.is_xor(i) {
                         refs.insert(xor0.var());
                         refs.insert(xor1.var());
-                        let xor0 = xor0.to_lit();
-                        let xor1 = xor1.to_lit();
+                        let xor0 = xor0.into();
+                        let xor1 = xor1.into();
                         ans.add_rel(n.var(), &LitVvec::cnf_xor(n, xor0, xor1));
                         continue;
                     }
@@ -102,9 +102,9 @@ impl Aig {
                         refs.insert(c.var());
                         refs.insert(t.var());
                         refs.insert(e.var());
-                        let c = c.to_lit();
-                        let t = t.to_lit();
-                        let e = e.to_lit();
+                        let c = c.into();
+                        let t = t.into();
+                        let e = e.into();
                         ans.add_rel(n.var(), &LitVvec::cnf_ite(n, c, t, e));
                         continue;
                     }
@@ -115,7 +115,7 @@ impl Aig {
                 refs.insert(fanin1.var());
                 ans.add_rel(
                     n.var(),
-                    &LitVvec::cnf_and(n, &[fanin0.to_lit(), fanin1.to_lit()]),
+                    &LitVvec::cnf_and(n, &[fanin0.into(), fanin1.into()]),
                 );
             }
         }

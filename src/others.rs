@@ -256,7 +256,7 @@ impl Aig {
             if self.nodes[i].is_and() {
                 let fanin0 = edge_map(self.nodes[i].fanin0());
                 let fanin1 = edge_map(self.nodes[i].fanin1());
-                let nl = res.trivial_new_and_node(fanin0, fanin1).to_lit().var();
+                let nl = res.trivial_new_and_node(fanin0, fanin1).var();
                 assert!(encode_map[i] == nl);
             }
         }
@@ -318,7 +318,7 @@ impl Aig {
             .new_latch(AigEdge::constant(false), Some(AigEdge::constant(true)))
             .into();
         for (l, gi) in gate_init {
-            let l = AigEdge::from_lit(l.lit());
+            let l = AigEdge::from(l.lit());
             let eq = self.new_eq_node(l, gi);
             let init_eq = self.new_imply_node(init, eq);
             self.constraints.push(init_eq);

@@ -113,37 +113,37 @@ impl Aig {
                 assert!(l.reset == l.lit);
                 None
             } else {
-                Some(AigEdge::from_lit(l.reset))
+                Some(AigEdge::from(l.reset))
             };
             latchs.push(AigLatch {
                 input: l.lit.var(),
-                next: AigEdge::from_lit(l.next),
+                next: AigEdge::from(l.next),
                 init,
             });
         }
         let outputs: Vec<AigEdge> = (0..aiger.num_outputs)
             .map(|i| unsafe { *aiger.outputs.add(i as usize) })
-            .map(|l| AigEdge::from_lit(l.lit))
+            .map(|l| AigEdge::from(l.lit))
             .collect();
         let bads: Vec<AigEdge> = (0..aiger.num_bad)
             .map(|i| unsafe { *aiger.bad.add(i as usize) })
-            .map(|l| AigEdge::from_lit(l.lit))
+            .map(|l| AigEdge::from(l.lit))
             .collect();
         let constraints: Vec<AigEdge> = (0..aiger.num_constraints)
             .map(|i| unsafe { *aiger.constraints.add(i as usize) })
-            .map(|l| AigEdge::from_lit(l.lit))
+            .map(|l| AigEdge::from(l.lit))
             .collect();
         let justice: Vec<Vec<AigEdge>> = (0..aiger.num_justice)
             .map(|i| unsafe { *aiger.justice.add(i as usize) })
             .map(|l| {
                 (0..l.size)
-                    .map(|j| unsafe { AigEdge::from_lit(*l.lits.add(j as usize)) })
+                    .map(|j| unsafe { AigEdge::from(*l.lits.add(j as usize)) })
                     .collect()
             })
             .collect();
         let fairness: Vec<AigEdge> = (0..aiger.num_fairness)
             .map(|i| unsafe { *aiger.fairness.add(i as usize) })
-            .map(|l| AigEdge::from_lit(l.lit))
+            .map(|l| AigEdge::from(l.lit))
             .collect();
         for i in inputs.iter() {
             nodes_remaining[usize::from(*i)].write(AigNode {
@@ -159,8 +159,8 @@ impl Aig {
             let a = unsafe { &*aiger.ands.add(i as usize) };
             let id: usize = a.lhs.var().into();
             nodes_remaining[id].write(AigNode::new_and(
-                AigEdge::from_lit(a.rhs0),
-                AigEdge::from_lit(a.rhs1),
+                AigEdge::from(a.rhs0),
+                AigEdge::from(a.rhs1),
             ));
         }
         unsafe { nodes.set_len(node_len) };
@@ -182,14 +182,12 @@ impl Aig {
         let aiger = unsafe { aiger_init() };
         for i in self.nodes_range() {
             if self.nodes[i].is_and() {
-                let fanin0 = self.nodes[i].fanin0().to_lit();
-                let fanin1 = self.nodes[i].fanin1().to_lit();
                 unsafe {
                     aiger_add_and(
                         aiger,
                         Var::new(i).lit().into(),
-                        fanin1.into(),
-                        fanin0.into(),
+                        Lit::from(self.nodes[i].fanin1()).into(),
+                        Lit::from(self.nodes[i].fanin0()).into(),
                     )
                 };
             };
@@ -214,26 +212,22 @@ impl Aig {
                 null()
             };
             let lit = l.input.lit();
-            unsafe { aiger_add_latch(aiger, lit.into(), l.next.to_lit().into(), s as _) };
+            unsafe { aiger_add_latch(aiger, lit.into(), Lit::from(l.next).into(), s as _) };
             drop(cs);
-            let reset: Lit = if let Some(i) = l.init {
-                i.to_lit()
-            } else {
-                lit
-            };
+            let reset: Lit = if let Some(i) = l.init { i.into() } else { lit };
             unsafe { aiger_add_reset(aiger, lit.into(), reset.into()) };
         }
         for l in self.outputs.iter() {
-            unsafe { aiger_add_output(aiger, l.to_lit().into(), null() as _) };
+            unsafe { aiger_add_output(aiger, Lit::from(*l).into(), null() as _) };
         }
         for l in self.bads.iter() {
-            unsafe { aiger_add_bad(aiger, l.to_lit().into(), null() as _) };
+            unsafe { aiger_add_bad(aiger, Lit::from(*l).into(), null() as _) };
         }
         for l in self.constraints.iter() {
-            unsafe { aiger_add_constraint(aiger, l.to_lit().into(), null() as _) };
+            unsafe { aiger_add_constraint(aiger, Lit::from(*l).into(), null() as _) };
         }
         for j in self.justice.iter() {
-            let j: Vec<_> = j.iter().map(|e| e.to_lit()).collect();
+            let j: Vec<_> = j.iter().map(|e| Lit::from(*e)).collect();
             unsafe {
                 aiger_add_justice(
                     aiger,
@@ -244,7 +238,7 @@ impl Aig {
             }
         }
         for l in self.fairness.iter() {
-            unsafe { aiger_add_fairness(aiger, l.to_lit().into(), null() as _) };
+            unsafe { aiger_add_fairness(aiger, Lit::from(*l).into(), null() as _) };
         }
         aiger as _
     }
