@@ -1,5 +1,8 @@
 use crate::{Aig, AigEdge, AigNodeType};
-use giputils::hash::{GHashMap, GHashSet};
+use giputils::{
+    gvec::Gvec,
+    hash::{GHashMap, GHashSet},
+};
 use logicrs::{Var, VarVMap};
 use std::mem::take;
 
@@ -223,15 +226,16 @@ impl Aig {
 
     pub fn reencode(&self) -> Self {
         let mut res = Self::new();
-        let mut encode_map = vec![Var::new(0); self.nodes.len()];
+        let mut encode_map = Gvec::new();
+        encode_map.reserve(self.nodes.len());
         let mut max_id = 0;
-        for l in self.inputs.iter() {
+        for &l in self.inputs.iter() {
             max_id += 1;
-            encode_map[usize::from(*l)] = Var::new(max_id);
+            encode_map[*l] = Var::new(max_id);
         }
         for l in self.latchs.iter() {
             max_id += 1;
-            encode_map[usize::from(l.input)] = Var::new(max_id);
+            encode_map[*l.input] = Var::new(max_id);
         }
         for i in 0..self.nodes.len() {
             if self.nodes[i].is_and() {
@@ -240,12 +244,12 @@ impl Aig {
             }
         }
         assert!(max_id + 1 == self.nodes.len());
-        let edge_map = |e: AigEdge| e.map(&|v| encode_map[usize::from(v)]);
-        for l in self.inputs.iter() {
-            assert!(res.new_input() == encode_map[usize::from(*l)]);
+        let edge_map = |e: AigEdge| e.map(&|v| encode_map[*v]);
+        for &l in self.inputs.iter() {
+            assert!(res.new_input() == encode_map[*l]);
         }
         for l in self.latchs.iter() {
-            assert!(res.new_latch(edge_map(l.next), l.init) == encode_map[usize::from(l.input)]);
+            assert!(res.new_latch(edge_map(l.next), l.init) == encode_map[*l.input]);
         }
         for i in 1..self.nodes.len() {
             if self.nodes[i].is_and() {
@@ -267,7 +271,7 @@ impl Aig {
         res.symbols = self
             .symbols
             .iter()
-            .map(|(v, s)| (encode_map[usize::from(*v)], s.clone()))
+            .map(|(&v, s)| (encode_map[*v], s.clone()))
             .collect();
         assert!(res.nodes.len() == self.nodes.len());
         res

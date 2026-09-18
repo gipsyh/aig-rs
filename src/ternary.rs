@@ -1,17 +1,18 @@
 use crate::{Aig, AigEdge};
+use giputils::gvec::Gvec;
 use logicrs::Lbool;
 
 impl Aig {
-    pub fn ternary_simulate(&self, input: &[Lbool], state: &[Lbool]) -> Vec<Lbool> {
+    pub fn ternary_simulate(&self, input: &[Lbool], state: &[Lbool]) -> Gvec<Lbool> {
         assert!(input.len() == self.inputs.len());
         assert!(state.len() == self.latchs.len());
-        let mut ans = vec![Lbool::default(); self.nodes.len()];
+        let mut ans = Gvec::from(vec![Lbool::default(); self.nodes.len()]);
         ans[0] = Lbool::FALSE;
         for i in 0..self.inputs.len() {
-            ans[usize::from(self.inputs[i])] = input[i];
+            ans[*self.inputs[i]] = input[i];
         }
         for i in 0..self.latchs.len() {
-            ans[usize::from(self.latchs[i].input)] = state[i];
+            ans[*self.latchs[i].input] = state[i];
         }
         for i in self.nodes_range() {
             if self.nodes[i].is_and() {
@@ -29,7 +30,7 @@ impl Aig {
 pub struct TernarySimulate<'a> {
     aig: &'a Aig,
     state: Vec<Lbool>,
-    value: Vec<Lbool>,
+    value: Gvec<Lbool>,
 }
 
 impl<'a> TernarySimulate<'a> {

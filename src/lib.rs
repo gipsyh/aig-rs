@@ -131,7 +131,7 @@ impl AigEdge {
     where
         M: Fn(Var) -> Var,
     {
-        Self(self.0.map_var(|v| map(v)))
+        Self(self.0.map_var(map))
     }
 }
 
