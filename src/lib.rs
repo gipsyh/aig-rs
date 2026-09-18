@@ -403,15 +403,15 @@ impl Aig {
 }
 
 impl Aig {
-    pub fn num_nodes(&self) -> usize {
-        self.nodes.len()
+    pub fn num_nodes(&self) -> u32 {
+        self.nodes.len() as _
     }
 
-    pub fn nodes_range(&self) -> Range<usize> {
+    pub fn nodes_range(&self) -> Range<u32> {
         1..self.num_nodes()
     }
 
-    pub fn nodes_range_with_false(&self) -> Range<usize> {
+    pub fn nodes_range_with_false(&self) -> Range<u32> {
         0..self.num_nodes()
     }
 
@@ -425,7 +425,7 @@ impl Aig {
         &self,
         logic: I,
     ) -> Gvec<bool> {
-        let mut flag = Gvec::from(vec![false; self.num_nodes()]);
+        let mut flag = Gvec::from(vec![false; self.num_nodes() as _]);
         for l in logic {
             flag[*l.var()] = true;
         }

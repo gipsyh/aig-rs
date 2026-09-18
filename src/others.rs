@@ -139,7 +139,7 @@ impl Aig {
             next_map.insert(l.input, l.next);
         }
         for i in from.nodes_range() {
-            let v = Var::new(i);
+            let v = Var(i);
             if next_map.contains_key(&v) {
                 continue;
             }
@@ -189,11 +189,7 @@ impl Aig {
     pub fn merge(&mut self, other: &Aig) {
         let offset = self.num_nodes() - 1;
         let map = |v: Var| {
-            if v.is_constant() {
-                v
-            } else {
-                Var::new(usize::from(v) + offset)
-            }
+            if v.is_constant() { v } else { v + offset }
         };
         for i in 1..other.num_nodes() {
             let n = other.nodes[i].map(&map);

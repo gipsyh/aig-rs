@@ -5,7 +5,7 @@ use logicrs::{DagCnf, Lit, LitVec, LitVvec, Var};
 impl Aig {
     #[inline]
     fn get_root_refs(&self) -> Gvec<bool> {
-        let mut refs = Gvec::from(vec![false; self.num_nodes()]);
+        let mut refs = Gvec::from(vec![false; self.num_nodes() as _]);
         for l in self.latchs.iter() {
             refs[*l.next.var()] = true;
             if let Some(init) = &l.init {
@@ -25,11 +25,11 @@ impl Aig {
         refs
     }
 
-    fn is_xor(&self, n: usize) -> Option<(AigEdge, AigEdge)> {
-        if !self.nodes[n].is_and() {
+    fn is_xor(&self, n: Var) -> Option<(AigEdge, AigEdge)> {
+        if !self.nodes[*n].is_and() {
             return None;
         }
-        let (fanin0, fanin1) = self.nodes[n].fanin();
+        let (fanin0, fanin1) = self.nodes[*n].fanin();
         if !fanin0.compl()
             || !fanin1.compl()
             || !self.nodes[*fanin0.var()].is_and()
@@ -48,11 +48,11 @@ impl Aig {
         None
     }
 
-    fn is_ite(&self, n: usize) -> Option<(AigEdge, AigEdge, AigEdge)> {
-        if !self.nodes[n].is_and() {
+    fn is_ite(&self, n: Var) -> Option<(AigEdge, AigEdge, AigEdge)> {
+        if !self.nodes[*n].is_and() {
             return None;
         }
-        let (fanin0, fanin1) = self.nodes[n].fanin();
+        let (fanin0, fanin1) = self.nodes[*n].fanin();
         if !fanin0.compl()
             || !fanin1.compl()
             || !self.nodes[*fanin0.var()].is_and()
@@ -83,12 +83,12 @@ impl Aig {
     pub fn cnf(&self, optimize: bool) -> DagCnf {
         let mut refs = self.get_root_refs();
         let mut ans = DagCnf::new();
-        ans.new_var_to(Var::new(self.num_nodes() - 1));
+        ans.new_var_to(Var(self.num_nodes() - 1));
         for i in self.nodes_range().rev() {
             if self.nodes[i].is_and() && refs[i] {
-                let n = Var::new(i).lit();
+                let n = Var(i).lit();
                 if optimize {
-                    if let Some((xor0, xor1)) = self.is_xor(i) {
+                    if let Some((xor0, xor1)) = self.is_xor(Var(i)) {
                         refs[*xor0.var()] = true;
                         refs[*xor1.var()] = true;
                         let xor0 = xor0.into();
@@ -96,7 +96,7 @@ impl Aig {
                         ans.add_rel_owned(n.var(), LitVvec::cnf_xor(n, xor0, xor1));
                         continue;
                     }
-                    if let Some((c, t, e)) = self.is_ite(i) {
+                    if let Some((c, t, e)) = self.is_ite(Var(i)) {
                         refs[*c.var()] = true;
                         refs[*t.var()] = true;
                         refs[*e.var()] = true;
@@ -127,7 +127,7 @@ impl Aig {
         let mut refs = self.get_root_refs();
         // Count uses in the recognized gate DAG, including external roots.
         // Values above one are equivalent for the inlining decision.
-        let mut uses: Vec<u8> = refs.iter().map(|&root| u8::from(root)).collect();
+        let mut uses: Gvec<u8> = refs.iter().map(|&root| u8::from(root)).collect();
         for i in self.nodes_range().rev() {
             if !self.nodes[i].is_and() || !refs[i] {
                 continue;
@@ -137,12 +137,12 @@ impl Aig {
                 let index = usize::from(v);
                 uses[index] = uses[index].saturating_add(1);
             };
-            if let Some((x, y)) = self.is_xor(i) {
+            if let Some((x, y)) = self.is_xor(Var(i)) {
                 mark(x.var());
                 mark(y.var());
                 continue;
             }
-            if let Some((c, t, e)) = self.is_ite(i) {
+            if let Some((c, t, e)) = self.is_ite(Var(i)) {
                 mark(c.var());
                 mark(t.var());
                 mark(e.var());
@@ -154,22 +154,22 @@ impl Aig {
 
         // Inline a private ITE branch into its parent. Stop after one level
         // so that clauses contain at most four literals.
-        let mut absorbed = Gvec::from(vec![false; self.num_nodes()]);
+        let mut absorbed = Gvec::from(vec![false; self.num_nodes() as _]);
         for i in self.nodes_range().rev() {
             if !self.nodes[i].is_and() || !refs[i] || absorbed[i] {
                 continue;
             }
-            if let Some((_, t, e)) = self.is_ite(i) {
+            if let Some((_, t, e)) = self.is_ite(Var(i)) {
                 for branch in [t, e] {
-                    let child = usize::from(branch.var());
-                    if uses[child] == 1 && self.is_ite(child).is_some() {
-                        absorbed[child] = true;
+                    let child = branch.var();
+                    if uses[*child] == 1 && self.is_ite(child).is_some() {
+                        absorbed[*child] = true;
                     }
                 }
             }
         }
 
-        let mut map = Gvec::from(vec![Var::CONST; self.num_nodes()]);
+        let mut map = Gvec::from(vec![Var::CONST; self.num_nodes() as _]);
         let mut count = 0;
         for i in self.nodes_range() {
             if self.nodes[i].is_leaf() || (self.nodes[i].is_and() && refs[i] && !absorbed[i]) {
@@ -191,11 +191,11 @@ impl Aig {
                 continue;
             }
             let n = map[i].lit();
-            if let Some((x, y)) = self.is_xor(i) {
+            if let Some((x, y)) = self.is_xor(Var(i)) {
                 ans.add_rel_owned(n.var(), LitVvec::cnf_xor(n, map_edge(x), map_edge(y)));
                 continue;
             }
-            if let Some((c, t, e)) = self.is_ite(i) {
+            if let Some((c, t, e)) = self.is_ite(Var(i)) {
                 let c = map_edge(c);
                 if !absorbed[*t.var()] && !absorbed[*e.var()] {
                     ans.add_rel_owned(n.var(), LitVvec::cnf_ite(n, c, map_edge(t), map_edge(e)));
@@ -203,8 +203,7 @@ impl Aig {
                     let mut rel = LitVvec::new();
                     for (guard, branch) in [(!c, t), (c, e)] {
                         if absorbed[*branch.var()] {
-                            let (select, then, otherwise) =
-                                self.is_ite(usize::from(branch.var())).unwrap();
+                            let (select, then, otherwise) = self.is_ite(branch.var()).unwrap();
                             let select = map_edge(select);
                             for (child_guard, leaf) in [(!select, then), (select, otherwise)] {
                                 let leaf = map_edge(leaf.not_if(branch.compl()));
@@ -276,7 +275,7 @@ mod tests {
                 continue;
             }
             satisfying += 1;
-            let mut values = vec![false; aig.num_nodes()];
+            let mut values = Gvec::from(vec![false; aig.num_nodes() as _]);
             let mut input_assignment = 0usize;
             for (i, &input) in aig.inputs.iter().enumerate() {
                 let bit = lit_value(map[*input].lit(), assignment);

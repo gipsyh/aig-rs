@@ -185,7 +185,7 @@ impl Aig {
                 unsafe {
                     aiger_add_and(
                         aiger,
-                        Var::new(i).lit().into(),
+                        Var(i).lit().into(),
                         Lit::from(self.nodes[i].fanin1()).into(),
                         Lit::from(self.nodes[i].fanin0()).into(),
                     )
