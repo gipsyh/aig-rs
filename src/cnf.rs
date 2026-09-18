@@ -1,6 +1,6 @@
 use crate::{Aig, AigEdge};
 use giputils::gvec::Gvec;
-use logicrs::{DagCnf, Lit, LitVvec, Var};
+use logicrs::{DagCnf, Lit, LitVec, LitVvec, Var};
 
 impl Aig {
     #[inline]
@@ -125,29 +125,54 @@ impl Aig {
     /// denotes an internal gate that was absorbed or is unreachable.
     pub fn cnf_compact(&self) -> (DagCnf, Gvec<Var>) {
         let mut refs = self.get_root_refs();
+        // Count uses in the recognized gate DAG, including external roots.
+        // Values above one are equivalent for the inlining decision.
+        let mut uses: Vec<u8> = refs.iter().map(|&root| u8::from(root)).collect();
         for i in self.nodes_range().rev() {
             if !self.nodes[i].is_and() || !refs[i] {
                 continue;
             }
+            let mut mark = |v: Var| {
+                refs[*v] = true;
+                let index = usize::from(v);
+                uses[index] = uses[index].saturating_add(1);
+            };
             if let Some((x, y)) = self.is_xor(i) {
-                refs[*x.var()] = true;
-                refs[*y.var()] = true;
+                mark(x.var());
+                mark(y.var());
                 continue;
             }
             if let Some((c, t, e)) = self.is_ite(i) {
-                refs[*c.var()] = true;
-                refs[*t.var()] = true;
-                refs[*e.var()] = true;
+                mark(c.var());
+                mark(t.var());
+                mark(e.var());
                 continue;
             }
-            refs[*self.nodes[i].fanin0().var()] = true;
-            refs[*self.nodes[i].fanin1().var()] = true;
+            mark(self.nodes[i].fanin0().var());
+            mark(self.nodes[i].fanin1().var());
+        }
+
+        // Inline a private ITE branch into its parent. Stop after one level
+        // so that clauses contain at most four literals.
+        let mut absorbed = Gvec::from(vec![false; self.num_nodes()]);
+        for i in self.nodes_range().rev() {
+            if !self.nodes[i].is_and() || !refs[i] || absorbed[i] {
+                continue;
+            }
+            if let Some((_, t, e)) = self.is_ite(i) {
+                for branch in [t, e] {
+                    let child = usize::from(branch.var());
+                    if uses[child] == 1 && self.is_ite(child).is_some() {
+                        absorbed[child] = true;
+                    }
+                }
+            }
         }
 
         let mut map = Gvec::from(vec![Var::CONST; self.num_nodes()]);
         let mut count = 0;
         for i in self.nodes_range() {
-            if self.nodes[i].is_leaf() || (self.nodes[i].is_and() && refs[i]) {
+            if self.nodes[i].is_leaf() || (self.nodes[i].is_and() && refs[i] && !absorbed[i]) {
                 count += 1;
                 map[i] = Var::new(count);
             }
@@ -162,7 +187,7 @@ impl Aig {
             })
         };
         for i in self.nodes_range() {
-            if !self.nodes[i].is_and() || !refs[i] {
+            if !self.nodes[i].is_and() || !refs[i] || absorbed[i] {
                 continue;
             }
             let n = map[i].lit();
@@ -171,10 +196,29 @@ impl Aig {
                 continue;
             }
             if let Some((c, t, e)) = self.is_ite(i) {
-                ans.add_rel_owned(
-                    n.var(),
-                    LitVvec::cnf_ite(n, map_edge(c), map_edge(t), map_edge(e)),
-                );
+                let c = map_edge(c);
+                if !absorbed[*t.var()] && !absorbed[*e.var()] {
+                    ans.add_rel_owned(n.var(), LitVvec::cnf_ite(n, c, map_edge(t), map_edge(e)));
+                } else {
+                    let mut rel = LitVvec::new();
+                    for (guard, branch) in [(!c, t), (c, e)] {
+                        if absorbed[*branch.var()] {
+                            let (select, then, otherwise) =
+                                self.is_ite(usize::from(branch.var())).unwrap();
+                            let select = map_edge(select);
+                            for (child_guard, leaf) in [(!select, then), (select, otherwise)] {
+                                let leaf = map_edge(leaf.not_if(branch.compl()));
+                                rel.push(LitVec::from([guard, child_guard, !n, leaf]));
+                                rel.push(LitVec::from([guard, child_guard, n, !leaf]));
+                            }
+                        } else {
+                            let leaf = map_edge(branch);
+                            rel.push(LitVec::from([guard, !n, leaf]));
+                            rel.push(LitVec::from([guard, n, !leaf]));
+                        }
+                    }
+                    ans.add_rel_owned(n.var(), rel);
+                }
                 continue;
             }
             ans.add_rel_owned(
@@ -189,5 +233,129 @@ impl Aig {
             );
         }
         (ans, map)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn mux(aig: &mut Aig, select: AigEdge, then: AigEdge, otherwise: AigEdge) -> AigEdge {
+        let on_then = aig.new_and_node(select, then);
+        let on_else = aig.new_and_node(!select, otherwise);
+        aig.new_or_node(on_then, on_else)
+    }
+
+    fn value(edge: AigEdge, values: &[bool]) -> bool {
+        let base = if edge.var().is_constant() {
+            false
+        } else {
+            values[usize::from(edge.var())]
+        };
+        base ^ edge.compl()
+    }
+
+    fn lit_value(lit: Lit, assignment: usize) -> bool {
+        let base = if lit.var().is_constant() {
+            false
+        } else {
+            (assignment >> (usize::from(lit.var()) - 1)) & 1 != 0
+        };
+        base == lit.polarity()
+    }
+
+    fn check_truth_table(aig: &Aig, cnf: &DagCnf, map: &Gvec<Var>) {
+        assert!(cnf.num_var() <= 12);
+        let mut satisfying = 0;
+        let mut seen_inputs = vec![false; 1usize << aig.inputs.len()];
+        for assignment in 0..(1usize << (cnf.num_var() - 1)) {
+            if !cnf
+                .clause()
+                .all(|clause| clause.iter().any(|&lit| lit_value(lit, assignment)))
+            {
+                continue;
+            }
+            satisfying += 1;
+            let mut values = vec![false; aig.num_nodes()];
+            let mut input_assignment = 0usize;
+            for (i, &input) in aig.inputs.iter().enumerate() {
+                let bit = lit_value(map[*input].lit(), assignment);
+                values[usize::from(input)] = bit;
+                input_assignment |= usize::from(bit) << i;
+            }
+            assert!(!seen_inputs[input_assignment]);
+            seen_inputs[input_assignment] = true;
+            for i in aig.nodes_range() {
+                if aig.nodes[i].is_and() {
+                    let (left, right) = aig.nodes[i].fanin();
+                    values[i] = value(left, &values) && value(right, &values);
+                }
+            }
+            for &root in &aig.bads {
+                let mapped = Lit::from(root).map_var(|v| map[*v]);
+                assert_eq!(lit_value(mapped, assignment), value(root, &values));
+            }
+        }
+        assert_eq!(satisfying, 1usize << aig.inputs.len());
+        assert!(seen_inputs.iter().all(|&seen| seen));
+    }
+
+    #[test]
+    fn inline_private_ite_branches() {
+        for negate_branch in [false, true] {
+            let mut aig = Aig::new();
+            let inputs: Vec<_> = (0..5).map(|_| AigEdge::from(aig.new_input())).collect();
+            let child = mux(&mut aig, inputs[1], inputs[2], inputs[3]);
+            let parent = mux(&mut aig, inputs[0], child.not_if(negate_branch), inputs[4]);
+            aig.bads.push(parent);
+            let (cnf, map) = aig.cnf_compact();
+            assert!(map[*child.var()].is_constant());
+            assert_eq!(cnf.num_clause(), 7); // constant clause and six ITE clauses
+            assert!(cnf.clause().all(|clause| clause.len() <= 4));
+            check_truth_table(&aig, &cnf, &map);
+        }
+    }
+
+    #[test]
+    fn inline_both_ite_branches() {
+        let mut aig = Aig::new();
+        let inputs: Vec<_> = (0..7).map(|_| AigEdge::from(aig.new_input())).collect();
+        let left = mux(&mut aig, inputs[1], inputs[2], inputs[3]);
+        let right = mux(&mut aig, inputs[4], inputs[5], inputs[6]);
+        let parent = mux(&mut aig, inputs[0], left, !right);
+        aig.bads.push(parent);
+        let (cnf, map) = aig.cnf_compact();
+        assert!(map[*left.var()].is_constant());
+        assert!(map[*right.var()].is_constant());
+        assert_eq!(cnf.num_clause(), 9);
+        assert!(cnf.clause().all(|clause| clause.len() <= 4));
+        check_truth_table(&aig, &cnf, &map);
+    }
+
+    #[test]
+    fn keep_externally_used_ite() {
+        let mut aig = Aig::new();
+        let inputs: Vec<_> = (0..5).map(|_| AigEdge::from(aig.new_input())).collect();
+        let child = mux(&mut aig, inputs[1], inputs[2], inputs[3]);
+        let parent = mux(&mut aig, inputs[0], child, inputs[4]);
+        aig.bads.extend([parent, child]);
+        let (cnf, map) = aig.cnf_compact();
+        assert!(!map[*child.var()].is_constant());
+        check_truth_table(&aig, &cnf, &map);
+    }
+
+    #[test]
+    fn limit_inlining_to_one_level() {
+        let mut aig = Aig::new();
+        let inputs: Vec<_> = (0..7).map(|_| AigEdge::from(aig.new_input())).collect();
+        let inner = mux(&mut aig, inputs[2], inputs[3], inputs[4]);
+        let middle = mux(&mut aig, inputs[1], inner, inputs[5]);
+        let outer = mux(&mut aig, inputs[0], middle, inputs[6]);
+        aig.bads.push(outer);
+        let (cnf, map) = aig.cnf_compact();
+        assert!(map[*middle.var()].is_constant());
+        assert!(!map[*inner.var()].is_constant());
+        assert!(cnf.clause().all(|clause| clause.len() <= 4));
+        check_truth_table(&aig, &cnf, &map);
     }
 }
