@@ -39,6 +39,13 @@ impl From<usize> for AigEdge {
     }
 }
 
+impl From<Var> for AigEdge {
+    #[inline]
+    fn from(value: Var) -> Self {
+        Self(value.lit())
+    }
+}
+
 impl PartialOrd for AigEdge {
     #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
@@ -122,21 +129,21 @@ impl AigEdge {
     #[inline]
     pub fn map<M>(&self, map: &M) -> Self
     where
-        M: Fn(usize) -> usize,
+        M: Fn(Var) -> Var,
     {
-        Self(self.0.map_var(|v| Var::new(map(v.into()))))
+        Self(self.0.map_var(|v| map(v)))
     }
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct AigLatch {
-    pub input: usize,
+    pub input: Var,
     pub next: AigEdge,
     pub init: Option<AigEdge>,
 }
 
 impl AigLatch {
-    pub fn new(input: usize, next: AigEdge, init: Option<AigEdge>) -> Self {
+    pub fn new(input: Var, next: AigEdge, init: Option<AigEdge>) -> Self {
         Self { input, next, init }
     }
 }
@@ -204,7 +211,7 @@ impl AigNode {
     #[inline]
     pub fn map<M>(&self, map: &M) -> Self
     where
-        M: Fn(usize) -> usize,
+        M: Fn(Var) -> Var,
     {
         let mut res = self.clone();
         if let AigNodeType::And(fanin0, fanin1) = &mut res.typ {
@@ -229,14 +236,14 @@ impl AigNode {
 #[derive(Debug, Clone)]
 pub struct Aig {
     pub nodes: Vec<AigNode>,
-    pub inputs: Vec<usize>,
+    pub inputs: Vec<Var>,
     pub latchs: Vec<AigLatch>,
     pub outputs: Vec<AigEdge>,
     pub bads: Vec<AigEdge>,
     pub constraints: Vec<AigEdge>,
     pub justice: Vec<Vec<AigEdge>>,
     pub fairness: Vec<AigEdge>,
-    pub symbols: GHashMap<usize, String>,
+    pub symbols: GHashMap<Var, String>,
 }
 
 impl Aig {
@@ -256,8 +263,8 @@ impl Aig {
         }
     }
 
-    pub fn new_leaf_node(&mut self) -> usize {
-        let id = self.nodes.len();
+    pub fn new_leaf_node(&mut self) -> Var {
+        let id = Var::new(self.nodes.len());
         let leaf = AigNode {
             typ: AigNodeType::Leaf,
         };
@@ -266,26 +273,26 @@ impl Aig {
     }
 
     #[inline]
-    pub fn new_input(&mut self) -> usize {
+    pub fn new_input(&mut self) -> Var {
         let input = self.new_leaf_node();
         self.inputs.push(input);
         input
     }
 
     #[inline]
-    pub fn add_input(&mut self, input: usize) {
+    pub fn add_input(&mut self, input: Var) {
         self.inputs.push(input);
     }
 
     #[inline]
-    pub fn new_latch(&mut self, next: AigEdge, init: Option<AigEdge>) -> usize {
+    pub fn new_latch(&mut self, next: AigEdge, init: Option<AigEdge>) -> Var {
         let input = self.new_leaf_node();
         self.latchs.push(AigLatch::new(input, next, init));
         input
     }
 
     #[inline]
-    pub fn add_latch(&mut self, input: usize, next: AigEdge, init: Option<AigEdge>) {
+    pub fn add_latch(&mut self, input: Var, next: AigEdge, init: Option<AigEdge>) {
         self.latchs.push(AigLatch::new(input, next, init))
     }
 
@@ -380,13 +387,13 @@ impl Aig {
     }
 
     #[inline]
-    pub fn get_symbol(&self, id: usize) -> Option<String> {
-        self.symbols.get(&id).cloned()
+    pub fn get_symbol(&self, v: Var) -> Option<String> {
+        self.symbols.get(&v).cloned()
     }
 
     #[inline]
-    pub fn set_symbol(&mut self, id: usize, s: &str) {
-        self.symbols.insert(id, s.to_string());
+    pub fn set_symbol(&mut self, v: Var, s: &str) {
+        self.symbols.insert(v, s.to_string());
     }
 }
 

@@ -7,7 +7,7 @@ impl Aig {
     pub fn coi(&self, root: &[usize]) -> GHashSet<usize> {
         let mut latchs = GHashMap::new();
         for l in self.latchs.iter() {
-            latchs.insert(l.input, *l);
+            latchs.insert(usize::from(l.input), *l);
         }
         let mut refine = GHashSet::new();
         refine.insert(AigEdge::constant(true).node_id());
@@ -52,26 +52,26 @@ impl Aig {
                 && !init.is_const()
             {
                 refine_root.push(init.node_id());
-                refine_root.push(l.input);
+                refine_root.push(usize::from(l.input));
             }
-            refine_root.push(l.input);
+            refine_root.push(usize::from(l.input));
         }
         if !self.justice.is_empty() || !self.fairness.is_empty() {
-            refine_root.extend(self.latchs.iter().map(|e| e.input));
+            refine_root.extend(self.latchs.iter().map(|e| usize::from(e.input)));
         }
         let refine = self.coi(&refine_root);
         let mut refine = Vec::from_iter(refine);
         refine.sort();
-        let mut refine_map = GHashMap::new();
+        let mut refine_map: GHashMap<Var, Var> = GHashMap::new();
         for (i, r) in refine.iter().enumerate() {
-            refine_map.insert(*r, i);
+            refine_map.insert(Var::new(*r), Var::new(i));
         }
-        let edge_map = |e: AigEdge| e.map(&|id| refine_map[&id]);
+        let edge_map = |e: AigEdge| e.map(&|v| refine_map[&v]);
         let mut nodes = Vec::new();
         let mut restore = VarVMap::new();
         for (id, n) in self.nodes.iter().enumerate() {
-            if let Some(new_id) = refine_map.get(&id) {
-                restore.insert(Var::new(*new_id), Var::new(id));
+            if let Some(new_id) = refine_map.get(&Var::new(id)) {
+                restore.insert(*new_id, Var::new(id));
                 let mut new_node = n.clone();
                 if let AigNodeType::And(fanin0, fanin1) = &mut new_node.typ {
                     *fanin0 = edge_map(*fanin0);
@@ -80,10 +80,10 @@ impl Aig {
                 nodes.push(new_node);
             }
         }
-        let inputs: Vec<usize> = self
+        let inputs: Vec<Var> = self
             .inputs
             .iter()
-            .filter_map(|n| refine_map.get(n).cloned())
+            .filter_map(|n| refine_map.get(n).copied())
             .collect();
         let mut latchs = Vec::new();
         for l in self.latchs.iter() {
@@ -133,7 +133,7 @@ impl Aig {
         let false_edge = AigEdge::constant(false);
         next_map.insert(false_edge.node_id(), false_edge);
         for l in self.latchs.iter() {
-            next_map.insert(l.input, l.next);
+            next_map.insert(usize::from(l.input), l.next);
         }
         for i in from.nodes_range() {
             if next_map.contains_key(&i) {
@@ -184,8 +184,12 @@ impl Aig {
 
     pub fn merge(&mut self, other: &Aig) {
         let offset = self.num_nodes() - 1;
-        let map = |x: usize| {
-            if x == 0 { x } else { x + offset }
+        let map = |v: Var| {
+            if v.is_constant() {
+                v
+            } else {
+                Var::new(usize::from(v) + offset)
+            }
         };
         for i in 1..other.num_nodes() {
             let n = other.nodes[i].map(&map);
@@ -219,38 +223,36 @@ impl Aig {
 
     pub fn reencode(&self) -> Self {
         let mut res = Self::new();
-        let mut encode_map = GHashMap::new();
-        encode_map.insert(0, 0);
+        let mut encode_map = vec![Var::new(0); self.nodes.len()];
         let mut max_id = 0;
         for l in self.inputs.iter() {
             max_id += 1;
-            encode_map.insert(*l, max_id);
+            encode_map[usize::from(*l)] = Var::new(max_id);
         }
         for l in self.latchs.iter() {
             max_id += 1;
-            encode_map.insert(l.input, max_id);
+            encode_map[usize::from(l.input)] = Var::new(max_id);
         }
         for i in 0..self.nodes.len() {
             if self.nodes[i].is_and() {
                 max_id += 1;
-                encode_map.insert(i, max_id);
+                encode_map[i] = Var::new(max_id);
             }
         }
         assert!(max_id + 1 == self.nodes.len());
-        let edge_map = |e: AigEdge| e.map(&|id| encode_map[&id]);
+        let edge_map = |e: AigEdge| e.map(&|v| encode_map[usize::from(v)]);
         for l in self.inputs.iter() {
-            let nl = res.new_input();
-            assert!(nl == encode_map[l]);
+            assert!(res.new_input() == encode_map[usize::from(*l)]);
         }
         for l in self.latchs.iter() {
-            let nl = res.new_latch(edge_map(l.next), l.init);
-            assert!(nl == encode_map[&l.input]);
+            assert!(res.new_latch(edge_map(l.next), l.init) == encode_map[usize::from(l.input)]);
         }
         for i in 1..self.nodes.len() {
             if self.nodes[i].is_and() {
                 let fanin0 = edge_map(self.nodes[i].fanin0());
                 let fanin1 = edge_map(self.nodes[i].fanin1());
-                assert!(encode_map[&i] == res.trivial_new_and_node(fanin0, fanin1).node_id());
+                let nl = res.trivial_new_and_node(fanin0, fanin1).to_lit().var();
+                assert!(encode_map[i] == nl);
             }
         }
         res.outputs = self.outputs.iter().map(|e| edge_map(*e)).collect();
@@ -265,7 +267,7 @@ impl Aig {
         res.symbols = self
             .symbols
             .iter()
-            .map(|(id, s)| (encode_map[id], s.clone()))
+            .map(|(v, s)| (encode_map[usize::from(*v)], s.clone()))
             .collect();
         assert!(res.nodes.len() == self.nodes.len());
         res
@@ -311,7 +313,7 @@ impl Aig {
             .new_latch(AigEdge::constant(false), Some(AigEdge::constant(true)))
             .into();
         for (l, gi) in gate_init {
-            let l: AigEdge = l.into();
+            let l = AigEdge::from_lit(l.lit());
             let eq = self.new_eq_node(l, gi);
             let init_eq = self.new_imply_node(init, eq);
             self.constraints.push(init_eq);

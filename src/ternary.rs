@@ -8,10 +8,10 @@ impl Aig {
         let mut ans = vec![Lbool::default(); self.nodes.len()];
         ans[0] = Lbool::FALSE;
         for i in 0..self.inputs.len() {
-            ans[self.inputs[i]] = input[i];
+            ans[usize::from(self.inputs[i])] = input[i];
         }
         for i in 0..self.latchs.len() {
-            ans[self.latchs[i].input] = state[i];
+            ans[usize::from(self.latchs[i].input)] = state[i];
         }
         for i in self.nodes_range() {
             if self.nodes[i].is_and() {

@@ -90,26 +90,24 @@ impl Aig {
             typ: crate::AigNodeType::False,
         });
         let mut symbols = GHashMap::default();
-        let inputs: Vec<usize> = (0..aiger.num_inputs)
+        let inputs: Vec<Var> = (0..aiger.num_inputs)
             .map(|i| unsafe { *aiger.inputs.add(i as usize) })
             .map(|l| {
-                let id: usize = l.lit.var().into();
                 if !l.name.is_null() {
                     let symbol = unsafe { CStr::from_ptr(l.name) };
                     let symbol = symbol.to_str().unwrap();
-                    symbols.insert(id, symbol.to_string());
+                    symbols.insert(l.lit.var(), symbol.to_string());
                 }
-                id
+                l.lit.var()
             })
             .collect();
         let mut latchs = Vec::new();
         for i in 0..aiger.num_latches {
             let l = unsafe { &*aiger.latches.add(i as usize) };
-            let id: usize = l.lit.var().into();
             if !l.name.is_null() {
                 let symbol = unsafe { CStr::from_ptr(l.name) };
                 let symbol = symbol.to_str().unwrap();
-                symbols.insert(id, symbol.to_string());
+                symbols.insert(l.lit.var(), symbol.to_string());
             }
             let init = if l.reset.var() == l.lit.var() {
                 assert!(l.reset == l.lit);
@@ -118,7 +116,7 @@ impl Aig {
                 Some(AigEdge::from_lit(l.reset))
             };
             latchs.push(AigLatch {
-                input: id,
+                input: l.lit.var(),
                 next: AigEdge::from_lit(l.next),
                 init,
             });
@@ -148,12 +146,12 @@ impl Aig {
             .map(|l| AigEdge::from_lit(l.lit))
             .collect();
         for i in inputs.iter() {
-            nodes_remaining[*i].write(AigNode {
+            nodes_remaining[usize::from(*i)].write(AigNode {
                 typ: crate::AigNodeType::Leaf,
             });
         }
         for l in latchs.iter() {
-            nodes_remaining[l.input].write(AigNode {
+            nodes_remaining[usize::from(l.input)].write(AigNode {
                 typ: crate::AigNodeType::Leaf,
             });
         }
@@ -204,7 +202,7 @@ impl Aig {
             } else {
                 null()
             };
-            unsafe { aiger_add_input(aiger, Var::new(*i).lit().into(), s as _) };
+            unsafe { aiger_add_input(aiger, i.lit().into(), s as _) };
             drop(cs);
         }
         for l in self.latchs.iter() {
@@ -215,7 +213,7 @@ impl Aig {
             } else {
                 null()
             };
-            let lit = Var::new(l.input).lit();
+            let lit = l.input.lit();
             unsafe { aiger_add_latch(aiger, lit.into(), l.next.to_lit().into(), s as _) };
             drop(cs);
             let reset: Lit = if let Some(i) = l.init {
