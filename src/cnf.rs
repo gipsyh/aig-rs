@@ -1,15 +1,15 @@
 use crate::{Aig, AigEdge};
-use giputils::hash::GHashSet;
+use giputils::gvec::Gvec;
 use logicrs::{DagCnf, LitVvec, Var};
 
 impl Aig {
     #[inline]
-    fn get_root_refs(&self) -> GHashSet<Var> {
-        let mut refs = GHashSet::new();
+    fn get_root_refs(&self) -> Gvec<bool> {
+        let mut refs = Gvec::from(vec![false; self.num_nodes()]);
         for l in self.latchs.iter() {
-            refs.insert(l.next.var());
+            refs[*l.next.var()] = true;
             if let Some(init) = &l.init {
-                refs.insert(init.var());
+                refs[*init.var()] = true;
             }
         }
         for l in self
@@ -20,7 +20,7 @@ impl Aig {
             .chain(self.justice.iter().flatten())
             .chain(self.fairness.iter())
         {
-            refs.insert(l.var());
+            refs[*l.var()] = true;
         }
         refs
     }
@@ -83,39 +83,37 @@ impl Aig {
     pub fn cnf(&self, optimize: bool) -> DagCnf {
         let mut refs = self.get_root_refs();
         let mut ans = DagCnf::new();
-        for (id, _) in self.nodes.iter().enumerate().skip(1) {
-            assert_eq!(Var::new(id), ans.new_var());
-        }
+        ans.new_var_to(Var::new(self.num_nodes() - 1));
         for i in self.nodes_range().rev() {
-            if self.nodes[i].is_and() && (refs.contains(&Var::new(i))) {
+            if self.nodes[i].is_and() && refs[i] {
                 let n = Var::new(i).lit();
                 if optimize {
                     if let Some((xor0, xor1)) = self.is_xor(i) {
-                        refs.insert(xor0.var());
-                        refs.insert(xor1.var());
+                        refs[*xor0.var()] = true;
+                        refs[*xor1.var()] = true;
                         let xor0 = xor0.into();
                         let xor1 = xor1.into();
-                        ans.add_rel(n.var(), &LitVvec::cnf_xor(n, xor0, xor1));
+                        ans.add_rel_owned(n.var(), LitVvec::cnf_xor(n, xor0, xor1));
                         continue;
                     }
                     if let Some((c, t, e)) = self.is_ite(i) {
-                        refs.insert(c.var());
-                        refs.insert(t.var());
-                        refs.insert(e.var());
+                        refs[*c.var()] = true;
+                        refs[*t.var()] = true;
+                        refs[*e.var()] = true;
                         let c = c.into();
                         let t = t.into();
                         let e = e.into();
-                        ans.add_rel(n.var(), &LitVvec::cnf_ite(n, c, t, e));
+                        ans.add_rel_owned(n.var(), LitVvec::cnf_ite(n, c, t, e));
                         continue;
                     }
                 }
                 let fanin0 = self.nodes[i].fanin0();
                 let fanin1 = self.nodes[i].fanin1();
-                refs.insert(fanin0.var());
-                refs.insert(fanin1.var());
-                ans.add_rel(
+                refs[*fanin0.var()] = true;
+                refs[*fanin1.var()] = true;
+                ans.add_rel_owned(
                     n.var(),
-                    &LitVvec::cnf_and(n, &[fanin0.into(), fanin1.into()]),
+                    LitVvec::cnf_and(n, &[fanin0.into(), fanin1.into()]),
                 );
             }
         }
