@@ -1,6 +1,6 @@
 use crate::{Aig, AigEdge};
 use giputils::gvec::Gvec;
-use logicrs::{DagCnf, LitVvec, Var};
+use logicrs::{DagCnf, Lit, LitVvec, Var};
 
 impl Aig {
     #[inline]
@@ -118,5 +118,76 @@ impl Aig {
             }
         }
         ans
+    }
+
+    /// Encode only the AIG nodes that survive gate recognition. The returned
+    /// map translates original AIG variables to the dense CNF numbering; zero
+    /// denotes an internal gate that was absorbed or is unreachable.
+    pub fn cnf_compact(&self) -> (DagCnf, Gvec<Var>) {
+        let mut refs = self.get_root_refs();
+        for i in self.nodes_range().rev() {
+            if !self.nodes[i].is_and() || !refs[i] {
+                continue;
+            }
+            if let Some((x, y)) = self.is_xor(i) {
+                refs[*x.var()] = true;
+                refs[*y.var()] = true;
+                continue;
+            }
+            if let Some((c, t, e)) = self.is_ite(i) {
+                refs[*c.var()] = true;
+                refs[*t.var()] = true;
+                refs[*e.var()] = true;
+                continue;
+            }
+            refs[*self.nodes[i].fanin0().var()] = true;
+            refs[*self.nodes[i].fanin1().var()] = true;
+        }
+
+        let mut map = Gvec::from(vec![Var::CONST; self.num_nodes()]);
+        let mut count = 0;
+        for i in self.nodes_range() {
+            if self.nodes[i].is_leaf() || (self.nodes[i].is_and() && refs[i]) {
+                count += 1;
+                map[i] = Var::new(count);
+            }
+        }
+        let mut ans = DagCnf::new();
+        ans.new_var_to(Var::new(count));
+        let map_edge = |edge: AigEdge| -> Lit {
+            Lit::from(edge).map_var(|v| {
+                let mapped = map[*v];
+                assert!(v.is_constant() || !mapped.is_constant());
+                mapped
+            })
+        };
+        for i in self.nodes_range() {
+            if !self.nodes[i].is_and() || !refs[i] {
+                continue;
+            }
+            let n = map[i].lit();
+            if let Some((x, y)) = self.is_xor(i) {
+                ans.add_rel_owned(n.var(), LitVvec::cnf_xor(n, map_edge(x), map_edge(y)));
+                continue;
+            }
+            if let Some((c, t, e)) = self.is_ite(i) {
+                ans.add_rel_owned(
+                    n.var(),
+                    LitVvec::cnf_ite(n, map_edge(c), map_edge(t), map_edge(e)),
+                );
+                continue;
+            }
+            ans.add_rel_owned(
+                n.var(),
+                LitVvec::cnf_and(
+                    n,
+                    &[
+                        map_edge(self.nodes[i].fanin0()),
+                        map_edge(self.nodes[i].fanin1()),
+                    ],
+                ),
+            );
+        }
+        (ans, map)
     }
 }
