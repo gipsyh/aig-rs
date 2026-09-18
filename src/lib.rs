@@ -4,7 +4,7 @@ mod others;
 mod strash;
 mod ternary;
 
-use giputils::hash::GHashMap;
+use giputils::{gvec::Gvec, hash::GHashMap};
 use logicrs::{Lit, Var};
 use std::{
     fmt,
@@ -56,7 +56,7 @@ impl PartialOrd for AigEdge {
 impl Ord for AigEdge {
     #[inline]
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.node_id().cmp(&other.node_id())
+        self.var().cmp(&other.var())
     }
 }
 
@@ -67,8 +67,8 @@ impl AigEdge {
     }
 
     #[inline]
-    pub fn node_id(&self) -> usize {
-        self.0.var().into()
+    pub fn var(&self) -> Var {
+        self.0.var()
     }
 
     #[inline]
@@ -77,8 +77,8 @@ impl AigEdge {
     }
 
     #[inline]
-    pub fn set_nodeid(&mut self, nodeid: usize) {
-        self.0 = Lit::new(Var::new(nodeid), self.0.polarity());
+    pub fn set_var(&mut self, v: Var) {
+        self.0 = Lit::new(v, self.0.polarity());
     }
 
     #[inline]
@@ -224,7 +224,7 @@ impl AigNode {
 
 impl AigNode {
     fn new_and(mut fanin0: AigEdge, mut fanin1: AigEdge) -> Self {
-        if fanin0.node_id() > fanin1.node_id() {
+        if fanin0.var() > fanin1.var() {
             swap(&mut fanin0, &mut fanin1);
         }
         Self {
@@ -235,7 +235,7 @@ impl AigNode {
 
 #[derive(Debug, Clone)]
 pub struct Aig {
-    pub nodes: Vec<AigNode>,
+    pub nodes: Gvec<AigNode>,
     pub inputs: Vec<Var>,
     pub latchs: Vec<AigLatch>,
     pub outputs: Vec<AigEdge>,
@@ -251,7 +251,8 @@ impl Aig {
         Self {
             nodes: vec![AigNode {
                 typ: AigNodeType::False,
-            }],
+            }]
+            .into(),
             inputs: Vec::new(),
             latchs: Vec::new(),
             outputs: Vec::new(),
@@ -306,7 +307,7 @@ impl Aig {
 
     #[inline]
     pub fn new_and_node(&mut self, mut fanin0: AigEdge, mut fanin1: AigEdge) -> AigEdge {
-        if fanin0.node_id() > fanin1.node_id() {
+        if fanin0.var() > fanin1.var() {
             swap(&mut fanin0, &mut fanin1);
         }
         if fanin0 == AigEdge::constant(true) {
@@ -416,15 +417,18 @@ impl Aig {
             .filter(|node| matches!(node.typ, AigNodeType::And(_, _)))
     }
 
-    pub fn fanin_logic_cone<'a, I: IntoIterator<Item = &'a AigEdge>>(&self, logic: I) -> Vec<bool> {
-        let mut flag = vec![false; self.num_nodes()];
+    pub fn fanin_logic_cone<'a, I: IntoIterator<Item = &'a AigEdge>>(
+        &self,
+        logic: I,
+    ) -> Gvec<bool> {
+        let mut flag = Gvec::from(vec![false; self.num_nodes()]);
         for l in logic {
-            flag[l.node_id()] = true;
+            flag[*l.var()] = true;
         }
         for id in self.nodes_range_with_false().rev() {
             if flag[id] && self.nodes[id].is_and() {
-                flag[self.nodes[id].fanin0().node_id()] = true;
-                flag[self.nodes[id].fanin1().node_id()] = true;
+                flag[*self.nodes[id].fanin0().var()] = true;
+                flag[*self.nodes[id].fanin1().var()] = true;
             }
         }
         flag

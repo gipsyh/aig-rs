@@ -1,5 +1,5 @@
 use crate::{Aig, AigEdge, AigLatch, AigNode};
-use giputils::hash::GHashMap;
+use giputils::{gvec::Gvec, hash::GHashMap};
 use libc::{FILE, c_int, fclose, fopen};
 use logicrs::{Lit, Var};
 use std::{
@@ -84,7 +84,7 @@ impl Aig {
     pub fn from_aiger(aiger: *mut c_void) -> Self {
         let aiger = unsafe { &mut *(aiger as *mut Aiger) };
         let node_len = (aiger.num_inputs + aiger.num_latches + aiger.num_ands + 1) as usize;
-        let mut nodes: Vec<AigNode> = Vec::with_capacity(node_len);
+        let mut nodes = Gvec::from(Vec::with_capacity(node_len));
         let nodes_remaining = nodes.spare_capacity_mut();
         nodes_remaining[0].write(AigNode {
             typ: crate::AigNodeType::False,

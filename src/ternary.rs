@@ -17,9 +17,9 @@ impl Aig {
         for i in self.nodes_range() {
             if self.nodes[i].is_and() {
                 let fanin0 =
-                    ans[self.nodes[i].fanin0().node_id()].not_if(self.nodes[i].fanin0().compl());
+                    ans[*self.nodes[i].fanin0().var()].not_if(self.nodes[i].fanin0().compl());
                 let fanin1 =
-                    ans[self.nodes[i].fanin1().node_id()].not_if(self.nodes[i].fanin1().compl());
+                    ans[*self.nodes[i].fanin1().var()].not_if(self.nodes[i].fanin1().compl());
                 ans[i] = fanin0 & fanin1;
             }
         }
@@ -47,11 +47,11 @@ impl<'a> TernarySimulate<'a> {
         self.value = self.aig.ternary_simulate(&input, &self.state);
         for i in 0..self.aig.latchs.len() {
             let ln = self.aig.latchs[i].next;
-            self.state[i] = self.value[ln.node_id()].not_if(ln.compl());
+            self.state[i] = self.value[*ln.var()].not_if(ln.compl());
         }
     }
 
     pub fn value(&self, e: AigEdge) -> Lbool {
-        self.value[e.node_id()].not_if(e.compl())
+        self.value[*e.var()].not_if(e.compl())
     }
 }

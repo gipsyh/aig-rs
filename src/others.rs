@@ -7,13 +7,13 @@ use logicrs::{Var, VarVMap};
 use std::mem::take;
 
 impl Aig {
-    pub fn coi(&self, root: &[usize]) -> GHashSet<usize> {
+    pub fn coi(&self, root: &[Var]) -> GHashSet<Var> {
         let mut latchs = GHashMap::new();
         for l in self.latchs.iter() {
-            latchs.insert(usize::from(l.input), *l);
+            latchs.insert(l.input, *l);
         }
         let mut refine = GHashSet::new();
-        refine.insert(AigEdge::constant(true).node_id());
+        refine.insert(Var::CONST);
         let mut queue = Vec::new();
         for r in root {
             if !refine.contains(r) {
@@ -22,55 +22,55 @@ impl Aig {
             }
         }
         while let Some(n) = queue.pop() {
-            let mut refine_insert = |n: usize| {
-                if !refine.contains(&n) {
-                    queue.push(n);
-                    refine.insert(n);
+            let mut refine_insert = |v: Var| {
+                if !refine.contains(&v) {
+                    queue.push(v);
+                    refine.insert(v);
                 }
             };
-            if self.nodes[n].is_and() {
-                let fanin0 = self.nodes[n].fanin0();
-                let fanin1 = self.nodes[n].fanin1();
-                refine_insert(fanin0.node_id());
-                refine_insert(fanin1.node_id());
+            if self.nodes[*n].is_and() {
+                let fanin0 = self.nodes[*n].fanin0();
+                let fanin1 = self.nodes[*n].fanin1();
+                refine_insert(fanin0.var());
+                refine_insert(fanin1.var());
             } else if let Some(l) = latchs.get(&n) {
-                refine_insert(l.next.node_id());
+                refine_insert(l.next.var());
             }
         }
         refine
     }
 
     pub fn coi_refine(&self) -> (Aig, VarVMap) {
-        let mut refine_root: Vec<usize> = self
+        let mut refine_root: Vec<Var> = self
             .constraints
             .iter()
             .chain(self.outputs.iter())
             .chain(self.bads.iter())
             .chain(self.justice.iter().flatten())
             .chain(self.fairness.iter())
-            .map(|e| e.node_id())
+            .map(|e| e.var())
             .collect();
         for l in self.latchs.iter() {
             if let Some(init) = l.init
                 && !init.is_const()
             {
-                refine_root.push(init.node_id());
-                refine_root.push(usize::from(l.input));
+                refine_root.push(init.var());
+                refine_root.push(l.input);
             }
-            refine_root.push(usize::from(l.input));
+            refine_root.push(l.input);
         }
         if !self.justice.is_empty() || !self.fairness.is_empty() {
-            refine_root.extend(self.latchs.iter().map(|e| usize::from(e.input)));
+            refine_root.extend(self.latchs.iter().map(|e| e.input));
         }
         let refine = self.coi(&refine_root);
         let mut refine = Vec::from_iter(refine);
         refine.sort();
         let mut refine_map: GHashMap<Var, Var> = GHashMap::new();
         for (i, r) in refine.iter().enumerate() {
-            refine_map.insert(Var::new(*r), Var::new(i));
+            refine_map.insert(*r, Var::new(i));
         }
         let edge_map = |e: AigEdge| e.map(&|v| refine_map[&v]);
-        let mut nodes = Vec::new();
+        let mut nodes = Gvec::new();
         let mut restore = VarVMap::new();
         for (id, n) in self.nodes.iter().enumerate() {
             if let Some(new_id) = refine_map.get(&Var::new(id)) {
@@ -134,29 +134,30 @@ impl Aig {
     pub fn unroll(&mut self, from: &Aig) {
         let mut next_map = GHashMap::new();
         let false_edge = AigEdge::constant(false);
-        next_map.insert(false_edge.node_id(), false_edge);
+        next_map.insert(false_edge.var(), false_edge);
         for l in self.latchs.iter() {
-            next_map.insert(usize::from(l.input), l.next);
+            next_map.insert(l.input, l.next);
         }
         for i in from.nodes_range() {
-            if next_map.contains_key(&i) {
+            let v = Var::new(i);
+            if next_map.contains_key(&v) {
                 continue;
             }
             if from.nodes[i].is_and() {
                 let fanin0 = self.nodes[i].fanin0();
                 let fanin1 = self.nodes[i].fanin1();
-                let fanin0 = next_map[&fanin0.node_id()].not_if(fanin0.compl());
-                let fanin1 = next_map[&fanin1.node_id()].not_if(fanin1.compl());
+                let fanin0 = next_map[&fanin0.var()].not_if(fanin0.compl());
+                let fanin1 = next_map[&fanin1.var()].not_if(fanin1.compl());
                 let next = self.new_and_node(fanin0, fanin1);
-                next_map.insert(i, next);
+                next_map.insert(v, next);
             } else {
                 let input = self.new_leaf_node();
                 self.inputs.push(input);
                 let next: AigEdge = input.into();
-                next_map.insert(i, next);
+                next_map.insert(v, next);
             }
         }
-        let edge_map = |e: AigEdge| next_map[&e.node_id()].not_if(e.compl());
+        let edge_map = |e: AigEdge| next_map[&e.var()].not_if(e.compl());
         for (f, s) in from.latchs.iter().zip(self.latchs.iter_mut()) {
             s.next = edge_map(f.next);
         }
