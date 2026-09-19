@@ -1,4 +1,4 @@
-use crate::{Aig, AigEdge, AigNodeType};
+use crate::{Aig, AigEdge};
 use giputils::{
     gvec::Gvec,
     hash::{GHashMap, GHashSet},
@@ -75,10 +75,10 @@ impl Aig {
         for (id, n) in self.nodes.iter().enumerate() {
             if let Some(new_id) = refine_map.get(&Var::new(id)) {
                 restore.insert(*new_id, Var::new(id));
-                let mut new_node = n.clone();
-                if let AigNodeType::And(fanin0, fanin1) = &mut new_node.typ {
-                    *fanin0 = edge_map(*fanin0);
-                    *fanin1 = edge_map(*fanin1);
+                let mut new_node = *n;
+                if new_node.is_and() {
+                    new_node.fanin0 = edge_map(new_node.fanin0);
+                    new_node.fanin1 = edge_map(new_node.fanin1);
                 }
                 nodes.push(new_node);
             }

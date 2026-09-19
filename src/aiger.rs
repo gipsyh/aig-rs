@@ -86,9 +86,7 @@ impl Aig {
         let node_len = (aiger.num_inputs + aiger.num_latches + aiger.num_ands + 1) as usize;
         let mut nodes = Gvec::from(Vec::with_capacity(node_len));
         let nodes_remaining = nodes.spare_capacity_mut();
-        nodes_remaining[0].write(AigNode {
-            typ: crate::AigNodeType::False,
-        });
+        nodes_remaining[0].write(AigNode::LEAF);
         let mut symbols = GHashMap::default();
         let inputs: Vec<Var> = (0..aiger.num_inputs)
             .map(|i| unsafe { *aiger.inputs.add(i as usize) })
@@ -146,14 +144,10 @@ impl Aig {
             .map(|l| AigEdge::from(l.lit))
             .collect();
         for i in inputs.iter() {
-            nodes_remaining[usize::from(*i)].write(AigNode {
-                typ: crate::AigNodeType::Leaf,
-            });
+            nodes_remaining[usize::from(*i)].write(AigNode::LEAF);
         }
         for l in latchs.iter() {
-            nodes_remaining[usize::from(l.input)].write(AigNode {
-                typ: crate::AigNodeType::Leaf,
-            });
+            nodes_remaining[usize::from(l.input)].write(AigNode::LEAF);
         }
         for i in 0..aiger.num_ands {
             let a = unsafe { &*aiger.ands.add(i as usize) };

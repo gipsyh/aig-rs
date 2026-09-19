@@ -75,8 +75,15 @@ impl Ord for AigEdge {
 }
 
 impl AigEdge {
+    pub const NONE: AigEdge = AigEdge(Lit::NONE);
+
     #[inline]
-    pub fn new(id: usize, complement: bool) -> Self {
+    pub const fn is_none(&self) -> bool {
+        self.0.is_none()
+    }
+
+    #[inline]
+    pub const fn new(id: usize, complement: bool) -> Self {
         Self(Lit::new(Var::new(id), !complement))
     }
 
@@ -106,7 +113,7 @@ impl AigEdge {
     }
 
     #[inline]
-    pub fn constant(polarity: bool) -> Self {
+    pub const fn constant(polarity: bool) -> Self {
         Self(Lit::constant(polarity))
     }
 
@@ -152,63 +159,79 @@ impl AigLatch {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum AigNodeType {
-    False,
-    Leaf,
-    And(AigEdge, AigEdge),
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AigNode {
-    typ: AigNodeType,
+    pub fanin0: AigEdge,
+    pub fanin1: AigEdge,
 }
 
 impl AigNode {
+    pub const LEAF: Self = Self {
+        fanin0: AigEdge::NONE,
+        fanin1: AigEdge::NONE,
+    };
+
+    #[inline]
+    pub fn new_and(mut fanin0: AigEdge, mut fanin1: AigEdge) -> Self {
+        debug_assert!(!fanin0.is_none() && !fanin1.is_none());
+        if fanin0.var() > fanin1.var() {
+            swap(&mut fanin0, &mut fanin1);
+        }
+        Self { fanin0, fanin1 }
+    }
+
+    #[inline]
     pub fn is_and(&self) -> bool {
-        matches!(self.typ, AigNodeType::And(_, _))
+        !self.is_leaf()
     }
 
+    #[inline]
     pub fn is_leaf(&self) -> bool {
-        matches!(self.typ, AigNodeType::Leaf)
+        *self == Self::LEAF
     }
 
+    #[inline]
     pub fn fanin0(&self) -> AigEdge {
-        if let AigNodeType::And(ret, _) = self.typ {
-            ret
+        if self.is_and() {
+            self.fanin0
         } else {
-            panic!();
+            panic!("fanin0 called on non-AND node");
         }
     }
 
+    #[inline]
     pub fn fanin1(&self) -> AigEdge {
-        if let AigNodeType::And(_, ret) = self.typ {
-            ret
+        if self.is_and() {
+            self.fanin1
         } else {
-            panic!();
+            panic!("fanin1 called on non-AND node");
         }
     }
 
+    #[inline]
     pub fn fanin(&self) -> (AigEdge, AigEdge) {
-        let AigNodeType::And(fanin0, fanin1) = self.typ else {
-            panic!();
-        };
-        (fanin0, fanin1)
-    }
-
-    pub fn set_fanin0(&mut self, fanin: AigEdge) {
-        if let AigNodeType::And(fanin0, _) = &mut self.typ {
-            *fanin0 = fanin
+        if self.is_and() {
+            (self.fanin0, self.fanin1)
         } else {
-            panic!();
+            panic!("fanin called on non-AND node");
         }
     }
 
-    pub fn set_fanin1(&mut self, fanin: AigEdge) {
-        if let AigNodeType::And(_, fanin1) = &mut self.typ {
-            *fanin1 = fanin
+    #[inline]
+    pub fn set_fanin0(&mut self, fanin: AigEdge) {
+        if self.is_and() {
+            self.fanin0 = fanin;
         } else {
-            panic!();
+            panic!("set_fanin0 called on non-AND node");
+        }
+    }
+
+    #[inline]
+    pub fn set_fanin1(&mut self, fanin: AigEdge) {
+        if self.is_and() {
+            self.fanin1 = fanin;
+        } else {
+            panic!("set_fanin1 called on non-AND node");
         }
     }
 
@@ -217,22 +240,13 @@ impl AigNode {
     where
         M: Fn(Var) -> Var,
     {
-        let mut res = self.clone();
-        if let AigNodeType::And(fanin0, fanin1) = &mut res.typ {
-            *fanin0 = fanin0.map(map);
-            *fanin1 = fanin1.map(map);
-        }
-        res
-    }
-}
-
-impl AigNode {
-    fn new_and(mut fanin0: AigEdge, mut fanin1: AigEdge) -> Self {
-        if fanin0.var() > fanin1.var() {
-            swap(&mut fanin0, &mut fanin1);
-        }
-        Self {
-            typ: AigNodeType::And(fanin0, fanin1),
+        if self.is_and() {
+            Self {
+                fanin0: self.fanin0.map(map),
+                fanin1: self.fanin1.map(map),
+            }
+        } else {
+            panic!();
         }
     }
 }
@@ -253,10 +267,7 @@ pub struct Aig {
 impl Aig {
     pub fn new() -> Self {
         Self {
-            nodes: vec![AigNode {
-                typ: AigNodeType::False,
-            }]
-            .into(),
+            nodes: vec![AigNode::LEAF].into(),
             inputs: Vec::new(),
             latchs: Vec::new(),
             outputs: Vec::new(),
@@ -270,10 +281,7 @@ impl Aig {
 
     pub fn new_leaf_node(&mut self) -> Var {
         let id = Var::new(self.nodes.len());
-        let leaf = AigNode {
-            typ: AigNodeType::Leaf,
-        };
-        self.nodes.push(leaf);
+        self.nodes.push(AigNode::LEAF);
         id
     }
 
@@ -413,12 +421,6 @@ impl Aig {
 
     pub fn nodes_range_with_false(&self) -> Range<u32> {
         0..self.num_nodes()
-    }
-
-    pub fn ands_iter(&self) -> impl Iterator<Item = &AigNode> {
-        self.nodes
-            .iter()
-            .filter(|node| matches!(node.typ, AigNodeType::And(_, _)))
     }
 
     pub fn fanin_logic_cone<'a, I: IntoIterator<Item = &'a AigEdge>>(
