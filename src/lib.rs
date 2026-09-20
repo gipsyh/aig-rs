@@ -1,6 +1,7 @@
 mod aiger;
 pub mod cnf;
 mod others;
+mod simplify;
 mod strash;
 mod ternary;
 

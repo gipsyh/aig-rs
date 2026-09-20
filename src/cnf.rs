@@ -1,6 +1,6 @@
-use crate::{Aig, AigEdge};
+use crate::Aig;
 use giputils::gvec::Gvec;
-use logicrs::{DagCnf, Lit, LitVec, LitVvec, Var};
+use logicrs::{DagCnf, LitVvec, Var};
 
 impl Aig {
     #[inline]
@@ -23,61 +23,6 @@ impl Aig {
             refs[*l.var()] = true;
         }
         refs
-    }
-
-    fn is_xor(&self, n: Var) -> Option<(AigEdge, AigEdge)> {
-        if !self.nodes[*n].is_and() {
-            return None;
-        }
-        let (fanin0, fanin1) = self.nodes[*n].fanin();
-        if !fanin0.compl()
-            || !fanin1.compl()
-            || !self.nodes[*fanin0.var()].is_and()
-            || !self.nodes[*fanin1.var()].is_and()
-        {
-            return None;
-        }
-        let (fanin00, fanin01) = self.nodes[*fanin0.var()].fanin();
-        let (fanin10, fanin11) = self.nodes[*fanin1.var()].fanin();
-        if fanin00 == !fanin10 && fanin01 == !fanin11 {
-            if fanin00.var() == fanin01.var() {
-                return None;
-            }
-            return Some((fanin00, fanin01));
-        }
-        None
-    }
-
-    fn is_ite(&self, n: Var) -> Option<(AigEdge, AigEdge, AigEdge)> {
-        if !self.nodes[*n].is_and() {
-            return None;
-        }
-        let (fanin0, fanin1) = self.nodes[*n].fanin();
-        if !fanin0.compl()
-            || !fanin1.compl()
-            || !self.nodes[*fanin0.var()].is_and()
-            || !self.nodes[*fanin1.var()].is_and()
-        {
-            return None;
-        }
-        let (fanin00, fanin01) = self.nodes[*fanin0.var()].fanin();
-        let (fanin10, fanin11) = self.nodes[*fanin1.var()].fanin();
-
-        let (i, t, e) = if fanin00 == !fanin10 {
-            (fanin00, !fanin01, !fanin11)
-        } else if fanin00 == !fanin11 {
-            (fanin00, !fanin01, !fanin10)
-        } else if fanin01 == !fanin10 {
-            (fanin01, !fanin00, !fanin11)
-        } else if fanin01 == !fanin11 {
-            (fanin01, !fanin00, !fanin10)
-        } else {
-            return None;
-        };
-        if i.var() == t.var() || i.var() == e.var() || t.var() == e.var() {
-            return None;
-        }
-        Some((i, t, e))
     }
 
     pub fn cnf(&self, optimize: bool) -> DagCnf {
@@ -125,9 +70,10 @@ impl Aig {
     /// denotes an internal gate that was absorbed or is unreachable.
     pub fn cnf_compact(&self) -> (DagCnf, Gvec<Var>) {
         let mut refs = self.get_root_refs();
-        // Count uses in the recognized gate DAG, including external roots.
-        // Values above one are equivalent for the inlining decision.
-        let mut uses: Gvec<u8> = refs.iter().map(|&root| u8::from(root)).collect();
+        // Count distinct parents in the recognized gate DAG, including an
+        // extra use for external roots. Update these counts after each merge:
+        // a shared descendant can become private as its parents are absorbed.
+        let mut uses: Gvec<u32> = refs.iter().map(|&root| u32::from(root)).collect();
         for i in self.nodes_range().rev() {
             if !self.nodes[i].is_and() || !refs[i] {
                 continue;
@@ -135,7 +81,7 @@ impl Aig {
             let mut mark = |v: Var| {
                 refs[*v] = true;
                 let index = usize::from(v);
-                uses[index] = uses[index].saturating_add(1);
+                uses[index] += 1;
             };
             if let Some((x, y)) = self.is_xor(Var(i)) {
                 mark(x.var());
@@ -148,27 +94,155 @@ impl Aig {
                 mark(e.var());
                 continue;
             }
-            mark(self.nodes[i].fanin0().var());
-            mark(self.nodes[i].fanin1().var());
+            let (a, b) = self.nodes[i].fanin();
+            mark(a.var());
+            if b.var() != a.var() {
+                mark(b.var());
+            }
         }
 
-        // Inline a private ITE branch into its parent. Stop after one level
-        // so that clauses contain at most four literals.
+        // Eliminate private gates by resolution, using their full equivalence
+        // definitions. The budgets bound distribution and clause width; a
+        // merge must never increase the combined number of clauses.
+        const MAX_CLAUSES: usize = 64;
+        const MAX_WIDTH: usize = 12;
         let mut absorbed = Gvec::from(vec![false; self.num_nodes() as _]);
+        let mut relations = Vec::new();
         for i in self.nodes_range().rev() {
             if !self.nodes[i].is_and() || !refs[i] || absorbed[i] {
                 continue;
             }
-            if let Some((_, t, e)) = self.is_ite(Var(i)) {
-                for branch in [t, e] {
-                    let child = branch.var();
-                    if uses[*child] == 1 && self.is_ite(child).is_some() {
+            let n = Var(i);
+            let mut rel = self.gate_cnf(n);
+            if uses[i] == 0 {
+                for dep in relation_deps(&rel, n) {
+                    uses[*dep] -= 1;
+                }
+                continue;
+            }
+            loop {
+                let dependencies = relation_deps(&rel, n);
+                let mut merged = false;
+                for &child in dependencies.iter().rev() {
+                    if uses[*child] != 1 || !self.nodes[*child].is_and() {
+                        continue;
+                    }
+                    let definition = self.gate_cnf(child);
+                    let next = inline_gate(&rel, child, &definition);
+                    if next.len() <= MAX_CLAUSES
+                        && next.len() <= rel.len() + definition.len()
+                        && next.iter().all(|clause| clause.len() <= MAX_WIDTH)
+                    {
+                        for &dep in &dependencies {
+                            uses[*dep] -= 1;
+                        }
+                        for dep in relation_deps(&definition, child) {
+                            uses[*dep] -= 1;
+                        }
+                        for dep in relation_deps(&next, n) {
+                            uses[*dep] += 1;
+                        }
+                        rel = next;
                         absorbed[*child] = true;
+                        merged = true;
+                        break;
+                    }
+                }
+                if !merged {
+                    break;
+                }
+            }
+            relations.push((n, rel));
+        }
+
+        // A small gate shared by up to three parents can still be cheaper to
+        // substitute into all of them. Judge the total clause cost, and retain
+        // externally visible roots. Work from outputs towards inputs so that
+        // newly private descendants can be considered later in this same pass.
+        let roots = self.get_root_refs();
+        let mut parents = Gvec::from(vec![Vec::new(); self.num_nodes() as usize]);
+        for (index, (n, rel)) in relations.iter().enumerate() {
+            for dep in relation_deps(rel, *n) {
+                if self.nodes[*dep].is_and() {
+                    parents[*dep].push(index);
+                }
+            }
+        }
+        for index in 0..relations.len() {
+            let (child, definition) = &relations[index];
+            let child = *child;
+            let owners = &parents[*child];
+            if roots[*child]
+                || owners.is_empty()
+                || owners.len() > 3
+                || definition.is_empty()
+                || definition.len() > 4
+            {
+                continue;
+            }
+            let mut replacements = Vec::new();
+            let mut old_cost = definition.len();
+            let mut new_cost = 0;
+            for &owner in owners {
+                let parent = &relations[owner].1;
+                // Bound temporary resolvents too, before subsumption runs.
+                let resolution_size: usize = parent
+                    .iter()
+                    .map(|clause| match clause.iter().find(|l| l.var() == child) {
+                        Some(pivot) => definition.iter().filter(|c| c.contains(&!(*pivot))).count(),
+                        None => 1,
+                    })
+                    .sum();
+                if resolution_size > 2 * MAX_CLAUSES {
+                    break;
+                }
+                let next = inline_gate(parent, child, definition);
+                if next.len() > MAX_CLAUSES || next.iter().any(|c| c.len() > MAX_WIDTH) {
+                    break;
+                }
+                old_cost += parent.len();
+                new_cost += next.len();
+                replacements.push((owner, next));
+            }
+            if replacements.len() != owners.len() || new_cost > old_cost {
+                continue;
+            }
+            for dep in relation_deps(definition, child) {
+                if self.nodes[*dep].is_and() {
+                    parents[*dep].retain(|&p| p != index);
+                }
+            }
+            relations[index].1.clear();
+            absorbed[*child] = true;
+            for (owner, next) in replacements {
+                let (n, rel) = &mut relations[owner];
+                for dep in relation_deps(rel, *n) {
+                    if self.nodes[*dep].is_and() {
+                        parents[*dep].retain(|&p| p != owner);
+                    }
+                }
+                for dep in relation_deps(&next, *n) {
+                    if self.nodes[*dep].is_and() {
+                        parents[*dep].push(owner);
+                    }
+                }
+                *rel = next;
+            }
+        }
+        drop(parents);
+
+        // Resolution can remove dependencies altogether (e.g. equal mux
+        // branches). Recompute reachability before assigning dense numbers.
+        refs = self.get_root_refs();
+        for (n, rel) in &relations {
+            if refs[**n] {
+                for l in rel.iter().flatten() {
+                    if l.var() != *n {
+                        refs[*l.var()] = true;
                     }
                 }
             }
         }
-
         let mut map = Gvec::from(vec![Var::CONST; self.num_nodes() as _]);
         let mut count = 0;
         for i in self.nodes_range() {
@@ -179,182 +253,71 @@ impl Aig {
         }
         let mut ans = DagCnf::new();
         ans.new_var_to(Var::new(count));
-        let map_edge = |edge: AigEdge| -> Lit {
-            Lit::from(edge).map_var(|v| {
-                let mapped = map[*v];
-                assert!(v.is_constant() || !mapped.is_constant());
-                mapped
-            })
-        };
-        for i in self.nodes_range() {
-            if !self.nodes[i].is_and() || !refs[i] || absorbed[i] {
+        for (n, mut rel) in relations.into_iter().rev() {
+            if !refs[*n] {
                 continue;
             }
-            let n = map[i].lit();
-            if let Some((x, y)) = self.is_xor(Var(i)) {
-                ans.add_rel_owned(n.var(), LitVvec::cnf_xor(n, map_edge(x), map_edge(y)));
-                continue;
-            }
-            if let Some((c, t, e)) = self.is_ite(Var(i)) {
-                let c = map_edge(c);
-                if !absorbed[*t.var()] && !absorbed[*e.var()] {
-                    ans.add_rel_owned(n.var(), LitVvec::cnf_ite(n, c, map_edge(t), map_edge(e)));
-                } else {
-                    let mut rel = LitVvec::new();
-                    for (guard, branch) in [(!c, t), (c, e)] {
-                        if absorbed[*branch.var()] {
-                            let (select, then, otherwise) = self.is_ite(branch.var()).unwrap();
-                            let select = map_edge(select);
-                            for (child_guard, leaf) in [(!select, then), (select, otherwise)] {
-                                let leaf = map_edge(leaf.not_if(branch.compl()));
-                                rel.push(LitVec::from([guard, child_guard, !n, leaf]));
-                                rel.push(LitVec::from([guard, child_guard, n, !leaf]));
-                            }
-                        } else {
-                            let leaf = map_edge(branch);
-                            rel.push(LitVec::from([guard, !n, leaf]));
-                            rel.push(LitVec::from([guard, n, !leaf]));
-                        }
-                    }
-                    ans.add_rel_owned(n.var(), rel);
+            for clause in rel.iter_mut() {
+                for l in clause.iter_mut() {
+                    *l = l.map_var(|v| {
+                        let mapped = map[*v];
+                        assert!(v.is_constant() || !mapped.is_constant());
+                        mapped
+                    });
                 }
-                continue;
             }
-            ans.add_rel_owned(
-                n.var(),
-                LitVvec::cnf_and(
-                    n,
-                    &[
-                        map_edge(self.nodes[i].fanin0()),
-                        map_edge(self.nodes[i].fanin1()),
-                    ],
-                ),
-            );
+            ans.add_rel_owned(map[*n], rel);
         }
         (ans, map)
     }
+
+    fn gate_cnf(&self, n: Var) -> LitVvec {
+        let mut rel = if let Some((x, y)) = self.is_xor(n) {
+            LitVvec::cnf_xor(n.lit(), x.into(), y.into())
+        } else if let Some((c, t, e)) = self.is_ite(n) {
+            LitVvec::cnf_ite(n.lit(), c.into(), t.into(), e.into())
+        } else {
+            let (a, b) = self.nodes[*n].fanin();
+            LitVvec::cnf_and(n.lit(), &[a.into(), b.into()])
+        };
+        for clause in rel.iter_mut() {
+            clause.sort_unstable();
+        }
+        rel
+    }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+fn relation_deps(rel: &LitVvec, output: Var) -> Vec<Var> {
+    let mut deps: Vec<_> = rel
+        .iter()
+        .flatten()
+        .map(|l| l.var())
+        .filter(|&v| v != output)
+        .collect();
+    deps.sort_unstable();
+    deps.dedup();
+    deps
+}
 
-    fn mux(aig: &mut Aig, select: AigEdge, then: AigEdge, otherwise: AigEdge) -> AigEdge {
-        let on_then = aig.new_and_node(select, then);
-        let on_else = aig.new_and_node(!select, otherwise);
-        aig.new_or_node(on_then, on_else)
-    }
-
-    fn value(edge: AigEdge, values: &[bool]) -> bool {
-        let base = if edge.var().is_constant() {
-            false
-        } else {
-            values[usize::from(edge.var())]
+/// Eliminate a gate from the conjunction of parent and definition. Every
+/// resolvent retains the parent's output, as required by DagCnf. The caller
+/// must substitute all parents before removing the gate's own definition.
+fn inline_gate(parent: &LitVvec, child: Var, definition: &LitVvec) -> LitVvec {
+    let mut result = LitVvec::new();
+    for clause in parent.iter() {
+        let Some(pivot) = clause.iter().find(|l| l.var() == child) else {
+            result.push(clause.clone());
+            continue;
         };
-        base ^ edge.compl()
-    }
-
-    fn lit_value(lit: Lit, assignment: usize) -> bool {
-        let base = if lit.var().is_constant() {
-            false
-        } else {
-            (assignment >> (usize::from(lit.var()) - 1)) & 1 != 0
-        };
-        base == lit.polarity()
-    }
-
-    fn check_truth_table(aig: &Aig, cnf: &DagCnf, map: &Gvec<Var>) {
-        assert!(cnf.num_var() <= 12);
-        let mut satisfying = 0;
-        let mut seen_inputs = vec![false; 1usize << aig.inputs.len()];
-        for assignment in 0..(1usize << (cnf.num_var() - 1)) {
-            if !cnf
-                .clause()
-                .all(|clause| clause.iter().any(|&lit| lit_value(lit, assignment)))
-            {
-                continue;
-            }
-            satisfying += 1;
-            let mut values = Gvec::from(vec![false; aig.num_nodes() as _]);
-            let mut input_assignment = 0usize;
-            for (i, &input) in aig.inputs.iter().enumerate() {
-                let bit = lit_value(map[*input].lit(), assignment);
-                values[usize::from(input)] = bit;
-                input_assignment |= usize::from(bit) << i;
-            }
-            assert!(!seen_inputs[input_assignment]);
-            seen_inputs[input_assignment] = true;
-            for i in aig.nodes_range() {
-                if aig.nodes[i].is_and() {
-                    let (left, right) = aig.nodes[i].fanin();
-                    values[i] = value(left, &values) && value(right, &values);
-                }
-            }
-            for &root in &aig.bads {
-                let mapped = Lit::from(root).map_var(|v| map[*v]);
-                assert_eq!(lit_value(mapped, assignment), value(root, &values));
+        if clause.contains(&!(*pivot)) {
+            continue; // A tautology must not become a constraint on resolution.
+        }
+        for other in definition.iter().filter(|c| c.contains(&!(*pivot))) {
+            if let Some(resolvent) = clause.ordered_resolvent(other, child) {
+                result.push(resolvent);
             }
         }
-        assert_eq!(satisfying, 1usize << aig.inputs.len());
-        assert!(seen_inputs.iter().all(|&seen| seen));
     }
-
-    #[test]
-    fn inline_private_ite_branches() {
-        for negate_branch in [false, true] {
-            let mut aig = Aig::new();
-            let inputs: Vec<_> = (0..5).map(|_| AigEdge::from(aig.new_input())).collect();
-            let child = mux(&mut aig, inputs[1], inputs[2], inputs[3]);
-            let parent = mux(&mut aig, inputs[0], child.not_if(negate_branch), inputs[4]);
-            aig.bads.push(parent);
-            let (cnf, map) = aig.cnf_compact();
-            assert!(map[*child.var()].is_constant());
-            assert_eq!(cnf.num_clause(), 7); // constant clause and six ITE clauses
-            assert!(cnf.clause().all(|clause| clause.len() <= 4));
-            check_truth_table(&aig, &cnf, &map);
-        }
-    }
-
-    #[test]
-    fn inline_both_ite_branches() {
-        let mut aig = Aig::new();
-        let inputs: Vec<_> = (0..7).map(|_| AigEdge::from(aig.new_input())).collect();
-        let left = mux(&mut aig, inputs[1], inputs[2], inputs[3]);
-        let right = mux(&mut aig, inputs[4], inputs[5], inputs[6]);
-        let parent = mux(&mut aig, inputs[0], left, !right);
-        aig.bads.push(parent);
-        let (cnf, map) = aig.cnf_compact();
-        assert!(map[*left.var()].is_constant());
-        assert!(map[*right.var()].is_constant());
-        assert_eq!(cnf.num_clause(), 9);
-        assert!(cnf.clause().all(|clause| clause.len() <= 4));
-        check_truth_table(&aig, &cnf, &map);
-    }
-
-    #[test]
-    fn keep_externally_used_ite() {
-        let mut aig = Aig::new();
-        let inputs: Vec<_> = (0..5).map(|_| AigEdge::from(aig.new_input())).collect();
-        let child = mux(&mut aig, inputs[1], inputs[2], inputs[3]);
-        let parent = mux(&mut aig, inputs[0], child, inputs[4]);
-        aig.bads.extend([parent, child]);
-        let (cnf, map) = aig.cnf_compact();
-        assert!(!map[*child.var()].is_constant());
-        check_truth_table(&aig, &cnf, &map);
-    }
-
-    #[test]
-    fn limit_inlining_to_one_level() {
-        let mut aig = Aig::new();
-        let inputs: Vec<_> = (0..7).map(|_| AigEdge::from(aig.new_input())).collect();
-        let inner = mux(&mut aig, inputs[2], inputs[3], inputs[4]);
-        let middle = mux(&mut aig, inputs[1], inner, inputs[5]);
-        let outer = mux(&mut aig, inputs[0], middle, inputs[6]);
-        aig.bads.push(outer);
-        let (cnf, map) = aig.cnf_compact();
-        assert!(map[*middle.var()].is_constant());
-        assert!(!map[*inner.var()].is_constant());
-        assert!(cnf.clause().all(|clause| clause.len() <= 4));
-        check_truth_table(&aig, &cnf, &map);
-    }
+    result.subsume_simplify();
+    result
 }
