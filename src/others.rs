@@ -3,7 +3,7 @@ use giputils::{
     gvec::Gvec,
     hash::{GHashMap, GHashSet},
 };
-use logicrs::{Var, VarVMap};
+use logicrs::Var;
 use std::mem::take;
 
 impl Aig {
@@ -38,97 +38,6 @@ impl Aig {
             }
         }
         refine
-    }
-
-    pub fn coi_refine(&self) -> (Aig, VarVMap) {
-        let mut refine_root: Vec<Var> = self
-            .constraints
-            .iter()
-            .chain(self.outputs.iter())
-            .chain(self.bads.iter())
-            .chain(self.justice.iter().flatten())
-            .chain(self.fairness.iter())
-            .map(|e| e.var())
-            .collect();
-        for l in self.latchs.iter() {
-            if let Some(init) = l.init
-                && !init.is_const()
-            {
-                refine_root.push(init.var());
-                refine_root.push(l.input);
-            }
-            refine_root.push(l.input);
-        }
-        if !self.justice.is_empty() || !self.fairness.is_empty() {
-            refine_root.extend(self.latchs.iter().map(|e| e.input));
-        }
-        let refine = self.coi(&refine_root);
-        let mut refine = Vec::from_iter(refine);
-        refine.sort();
-        let mut refine_map: GHashMap<Var, Var> = GHashMap::new();
-        for (i, r) in refine.iter().enumerate() {
-            refine_map.insert(*r, Var::new(i));
-        }
-        let edge_map = |e: AigEdge| e.map(&|v| refine_map[&v]);
-        let mut nodes = Gvec::new();
-        let mut restore = VarVMap::new();
-        for (id, n) in self.nodes.iter().enumerate() {
-            if let Some(new_id) = refine_map.get(&Var::new(id)) {
-                restore.insert(*new_id, Var::new(id));
-                let mut new_node = *n;
-                if new_node.is_and() {
-                    new_node.fanin0 = edge_map(new_node.fanin0);
-                    new_node.fanin1 = edge_map(new_node.fanin1);
-                }
-                nodes.push(new_node);
-            }
-        }
-        let inputs: Vec<Var> = self
-            .inputs
-            .iter()
-            .filter_map(|n| refine_map.get(n).copied())
-            .collect();
-        let mut latchs = Vec::new();
-        for l in self.latchs.iter() {
-            if let Some(new_input) = refine_map.get(&l.input) {
-                let mut new_latch = *l;
-                new_latch.input = *new_input;
-                new_latch.next = edge_map(new_latch.next);
-                if let Some(init) = &mut new_latch.init {
-                    *init = edge_map(*init);
-                }
-                latchs.push(new_latch);
-            }
-        }
-        let outputs: Vec<AigEdge> = self.outputs.iter().map(|n| edge_map(*n)).collect();
-        let bads: Vec<AigEdge> = self.bads.iter().map(|n| edge_map(*n)).collect();
-        let constraints: Vec<AigEdge> = self.constraints.iter().map(|n| edge_map(*n)).collect();
-        let justice: Vec<Vec<AigEdge>> = self
-            .justice
-            .iter()
-            .map(|j| j.iter().map(|n| edge_map(*n)).collect())
-            .collect();
-        let fairness: Vec<AigEdge> = self.fairness.iter().map(|n| edge_map(*n)).collect();
-        let mut symbols = GHashMap::new();
-        for (k, s) in self.symbols.iter() {
-            if let Some(r) = refine_map.get(k) {
-                symbols.insert(*r, s.clone());
-            }
-        }
-        (
-            Self {
-                nodes,
-                inputs,
-                latchs,
-                outputs,
-                bads,
-                constraints,
-                symbols,
-                justice,
-                fairness,
-            },
-            restore,
-        )
     }
 
     pub fn unroll(&mut self, from: &Aig) {
