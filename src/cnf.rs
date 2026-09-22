@@ -101,11 +101,6 @@ impl Aig {
             }
         }
 
-        // Eliminate private gates by resolution, using their full equivalence
-        // definitions. The budgets bound distribution and clause width; a
-        // merge must never increase the combined number of clauses.
-        const MAX_CLAUSES: usize = 64;
-        const MAX_WIDTH: usize = 12;
         let mut absorbed = Gvec::from(vec![false; self.num_nodes() as _]);
         let mut relations = Vec::new();
         for i in self.nodes_range().rev() {
@@ -114,122 +109,37 @@ impl Aig {
             }
             let n = Var(i);
             let mut rel = self.gate_cnf(n);
+            let rel_lits = rel.num_lit();
             if uses[i] == 0 {
                 for dep in relation_deps(&rel, n) {
                     uses[*dep] -= 1;
                 }
                 continue;
             }
-            loop {
-                let dependencies = relation_deps(&rel, n);
-                let mut merged = false;
-                for &child in dependencies.iter().rev() {
-                    if uses[*child] != 1 || !self.nodes[*child].is_and() {
-                        continue;
-                    }
-                    let definition = self.gate_cnf(child);
-                    let next = inline_gate(&rel, child, &definition);
-                    if next.len() <= MAX_CLAUSES
-                        && next.len() <= rel.len() + definition.len()
-                        && next.iter().all(|clause| clause.len() <= MAX_WIDTH)
-                    {
-                        for &dep in &dependencies {
-                            uses[*dep] -= 1;
-                        }
-                        for dep in relation_deps(&definition, child) {
-                            uses[*dep] -= 1;
-                        }
-                        for dep in relation_deps(&next, n) {
-                            uses[*dep] += 1;
-                        }
-                        rel = next;
-                        absorbed[*child] = true;
-                        merged = true;
-                        break;
-                    }
+            let dependencies = relation_deps(&rel, n);
+            for &child in dependencies.iter().rev() {
+                if uses[*child] != 1 || !self.nodes[*child].is_and() {
+                    continue;
                 }
-                if !merged {
+                let definition = self.gate_cnf(child);
+                let next = inline_gate(&rel, child, &definition);
+                if next.num_lit() <= rel_lits + definition.num_lit() {
+                    for &dep in &dependencies {
+                        uses[*dep] -= 1;
+                    }
+                    for dep in relation_deps(&definition, child) {
+                        uses[*dep] -= 1;
+                    }
+                    for dep in relation_deps(&next, n) {
+                        uses[*dep] += 1;
+                    }
+                    rel = next;
+                    absorbed[*child] = true;
                     break;
                 }
             }
             relations.push((n, rel));
         }
-
-        // A small gate shared by up to three parents can still be cheaper to
-        // substitute into all of them. Judge the total clause cost, and retain
-        // externally visible roots. Work from outputs towards inputs so that
-        // newly private descendants can be considered later in this same pass.
-        let roots = self.get_root_refs();
-        let mut parents = Gvec::from(vec![Vec::new(); self.num_nodes() as usize]);
-        for (index, (n, rel)) in relations.iter().enumerate() {
-            for dep in relation_deps(rel, *n) {
-                if self.nodes[*dep].is_and() {
-                    parents[*dep].push(index);
-                }
-            }
-        }
-        for index in 0..relations.len() {
-            let (child, definition) = &relations[index];
-            let child = *child;
-            let owners = &parents[*child];
-            if roots[*child]
-                || owners.is_empty()
-                || owners.len() > 3
-                || definition.is_empty()
-                || definition.len() > 4
-            {
-                continue;
-            }
-            let mut replacements = Vec::new();
-            let mut old_cost = definition.len();
-            let mut new_cost = 0;
-            for &owner in owners {
-                let parent = &relations[owner].1;
-                // Bound temporary resolvents too, before subsumption runs.
-                let resolution_size: usize = parent
-                    .iter()
-                    .map(|clause| match clause.iter().find(|l| l.var() == child) {
-                        Some(pivot) => definition.iter().filter(|c| c.contains(&!(*pivot))).count(),
-                        None => 1,
-                    })
-                    .sum();
-                if resolution_size > 2 * MAX_CLAUSES {
-                    break;
-                }
-                let next = inline_gate(parent, child, definition);
-                if next.len() > MAX_CLAUSES || next.iter().any(|c| c.len() > MAX_WIDTH) {
-                    break;
-                }
-                old_cost += parent.len();
-                new_cost += next.len();
-                replacements.push((owner, next));
-            }
-            if replacements.len() != owners.len() || new_cost > old_cost {
-                continue;
-            }
-            for dep in relation_deps(definition, child) {
-                if self.nodes[*dep].is_and() {
-                    parents[*dep].retain(|&p| p != index);
-                }
-            }
-            relations[index].1.clear();
-            absorbed[*child] = true;
-            for (owner, next) in replacements {
-                let (n, rel) = &mut relations[owner];
-                for dep in relation_deps(rel, *n) {
-                    if self.nodes[*dep].is_and() {
-                        parents[*dep].retain(|&p| p != owner);
-                    }
-                }
-                for dep in relation_deps(&next, *n) {
-                    if self.nodes[*dep].is_and() {
-                        parents[*dep].push(owner);
-                    }
-                }
-                *rel = next;
-            }
-        }
-        drop(parents);
 
         // Resolution can remove dependencies altogether (e.g. equal mux
         // branches). Recompute reachability before assigning dense numbers.
