@@ -1,5 +1,5 @@
 //! Native AIGER 1.9 codec. Binary ANDs are decoded directly into `AigNode`s.
-use crate::{Aig, AigEdge, AigLatch, AigNode};
+use crate::{Aig, AigLatch, AigNode};
 use giputils::hash::GHashMap;
 use logicrs::{Lit, Var};
 use std::{
@@ -12,8 +12,8 @@ fn invalid(message: impl Into<String>) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message.into())
 }
 
-fn edge(lit: u32) -> AigEdge {
-    AigEdge::new((lit / 2) as usize, lit & 1 != 0)
+fn edge(lit: u32) -> Lit {
+    Lit::new(Var(lit / 2), lit & 1 == 0)
 }
 
 struct Decoder<'a> {
@@ -71,9 +71,9 @@ impl<'a> Decoder<'a> {
         Ok(result)
     }
 
-    fn literal(&self, lit: u32) -> io::Result<AigEdge> {
+    fn literal(&self, lit: u32) -> io::Result<Lit> {
         if lit == u32::MAX {
-            return Err(self.error("literal is reserved for AigEdge::NONE"));
+            return Err(self.error("literal is reserved for Lit::NONE"));
         }
         if lit / 2 > self.maxvar {
             return Err(self.error("literal exceeds maximum variable"));
@@ -81,7 +81,7 @@ impl<'a> Decoder<'a> {
         Ok(edge(lit))
     }
 
-    fn edges(&mut self, count: u32) -> io::Result<Vec<AigEdge>> {
+    fn edges(&mut self, count: u32) -> io::Result<Vec<Lit>> {
         self.check_count(count as u64, 2)?;
         (0..count)
             .map(|_| {
@@ -240,12 +240,12 @@ impl Aig {
                 define(&mut aig, lhs, node)?;
             }
             // AAG permits sparse IDs and forward references; compact without allocating M slots.
-            let remap = |e: AigEdge| -> io::Result<AigEdge> {
+            let remap = |e: Lit| -> io::Result<Lit> {
                 if usize::from(e.var()) == 0 {
                     return Ok(e);
                 }
                 ids.get(&usize::from(e.var()))
-                    .map(|&id| AigEdge::from(id).not_if(e.compl()))
+                    .map(|&id| Lit::from(id).not_if(!e.polarity()))
                     .ok_or_else(|| invalid("reference to undefined variable"))
             };
             for node in aig.nodes.iter_mut() {
@@ -312,7 +312,7 @@ impl Aig {
         Ok(aig)
     }
 
-    fn map_references(&mut self, map: &impl Fn(AigEdge) -> io::Result<AigEdge>) -> io::Result<()> {
+    fn map_references(&mut self, map: &impl Fn(Lit) -> io::Result<Lit>) -> io::Result<()> {
         for l in &mut self.latchs {
             l.next = map(l.next)?;
         }
@@ -395,45 +395,45 @@ impl Aig {
             let input = result.new_leaf_node();
             result.latchs.push(AigLatch {
                 input,
-                next: l.next.map(&|id| map[usize::from(id)]),
+                next: l.next.map_var(|id| map[usize::from(id)]),
                 init: l.init,
             });
         }
         for &id in order {
             let n = &self.nodes[id];
             result.nodes.push(AigNode::new_and(
-                n.fanin0().map(&|id| map[usize::from(id)]),
-                n.fanin1().map(&|id| map[usize::from(id)]),
+                n.fanin0().map_var(|id| map[usize::from(id)]),
+                n.fanin1().map_var(|id| map[usize::from(id)]),
             ));
         }
         result.outputs = self
             .outputs
             .iter()
-            .map(|e| e.map(&|id| map[usize::from(id)]))
+            .map(|e| e.map_var(|id| map[usize::from(id)]))
             .collect();
         result.bads = self
             .bads
             .iter()
-            .map(|e| e.map(&|id| map[usize::from(id)]))
+            .map(|e| e.map_var(|id| map[usize::from(id)]))
             .collect();
         result.constraints = self
             .constraints
             .iter()
-            .map(|e| e.map(&|id| map[usize::from(id)]))
+            .map(|e| e.map_var(|id| map[usize::from(id)]))
             .collect();
         result.justice = self
             .justice
             .iter()
             .map(|j| {
                 j.iter()
-                    .map(|e| e.map(&|id| map[usize::from(id)]))
+                    .map(|e| e.map_var(|id| map[usize::from(id)]))
                     .collect()
             })
             .collect();
         result.fairness = self
             .fairness
             .iter()
-            .map(|e| e.map(&|id| map[usize::from(id)]))
+            .map(|e| e.map_var(|id| map[usize::from(id)]))
             .collect();
         result.symbols = self
             .symbols
@@ -474,7 +474,7 @@ impl Aig {
             defined[usize::from(id)] = true;
             canonical &= id == index + 1;
         }
-        let valid_edge = |e: AigEdge| -> io::Result<()> {
+        let valid_edge = |e: Lit| -> io::Result<()> {
             if e.is_none() || usize::from(e.var()) >= self.nodes.len() {
                 Err(invalid("reference outside graph"))
             } else {
@@ -499,7 +499,9 @@ impl Aig {
         }
         for l in &self.latchs {
             valid_edge(l.next)?;
-            if l.init.is_some_and(|e| e.is_none() || !e.is_const()) {
+            if l.init
+                .is_some_and(|e| e.is_none() || !e.var().is_constant())
+            {
                 return Err(invalid("latch initialization must be constant or None"));
             }
         }
@@ -638,8 +640,8 @@ impl Aig {
     }
 }
 
-fn literal(e: AigEdge) -> u32 {
-    Lit::from(e).into()
+fn literal(e: Lit) -> u32 {
+    e.into()
 }
 
 fn decimal(out: &mut Vec<u8>, mut n: u32) {
@@ -708,7 +710,7 @@ mod tests {
     #[test]
     fn extended_roundtrip() {
         let a = Aig::read_aiger(EXTENDED).unwrap();
-        assert_eq!(a.latchs[0].init, Some(AigEdge::constant(false)));
+        assert_eq!(a.latchs[0].init, Some(Lit::constant(false)));
         assert_eq!(a.latchs[1].init, None);
         assert_eq!(a.justice, vec![vec![edge(4), edge(13)], vec![]]);
         assert_eq!(a.symbols[&Var::new(1)], "first input");
@@ -717,7 +719,7 @@ mod tests {
             assert_graph_eq(&a, &Aig::read_aiger(&bytes).unwrap());
         }
         let mut a = a;
-        a.latchs[0].init = Some(AigEdge::constant(true));
+        a.latchs[0].init = Some(Lit::constant(true));
         assert_graph_eq(
             &a,
             &Aig::read_aiger(&a.encode_aiger(false).unwrap()).unwrap(),
@@ -804,7 +806,7 @@ mod tests {
         let path = std::env::temp_dir().join(format!("aiger-invalid-{}.aig", std::process::id()));
         fs::write(&path, b"keep existing contents").unwrap();
         let mut a = Aig::new();
-        a.outputs.push(AigEdge::from(123));
+        a.outputs.push(Var::new(123).lit());
         assert!(a.try_to_file(&path, false).is_err());
         assert_eq!(fs::read(&path).unwrap(), b"keep existing contents");
         fs::remove_file(path).unwrap();
@@ -852,7 +854,7 @@ mod tests {
             }
         }
         assert!(a.write_aiger(Fail, false).is_err());
-        a.outputs.push(AigEdge::from(999));
+        a.outputs.push(Var::new(999).lit());
         assert!(a.encode_aiger(false).is_err());
     }
 
@@ -861,15 +863,15 @@ mod tests {
         assert!(Aig::read_aiger(b"aag 2147483647 0 0 1 0\n4294967295\n").is_err());
         assert!(Aig::read_aiger(b"aag 2147483647 0 0 0 1\n2 4294967295 0\n").is_err());
         let mut a = Aig::new();
-        a.outputs.push(AigEdge::NONE);
+        a.outputs.push(Lit::NONE);
         assert!(a.encode_aiger(false).is_err());
         a.outputs.clear();
-        a.new_latch(edge(0), Some(AigEdge::NONE));
+        a.new_latch(edge(0), Some(Lit::NONE));
         assert!(a.encode_aiger(false).is_err());
         a.latchs[0].init = None;
         a.nodes.push(AigNode {
             fanin0: edge(0),
-            fanin1: AigEdge::NONE,
+            fanin1: Lit::NONE,
         });
         assert!(a.encode_aiger(false).is_err());
     }
@@ -892,8 +894,8 @@ mod tests {
                 let x = rng as usize % a.nodes.len();
                 let y = (x + 1 + (rng >> 32) as usize % (a.nodes.len() - 1)) % a.nodes.len();
                 let e = a.trivial_new_and_node(
-                    AigEdge::new(x, rng & 1 != 0),
-                    AigEdge::new(y, rng & 2 != 0),
+                    Lit::new(Var::new(x), rng & 1 == 0),
+                    Lit::new(Var::new(y), rng & 2 == 0),
                 );
                 a.outputs.push(e);
             }

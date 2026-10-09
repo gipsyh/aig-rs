@@ -1,9 +1,9 @@
-use crate::{Aig, AigEdge};
+use crate::Aig;
 use giputils::{
     gvec::Gvec,
     hash::{GHashMap, GHashSet},
 };
-use logicrs::Var;
+use logicrs::{Lit, Var};
 use std::mem::take;
 
 impl Aig {
@@ -42,7 +42,7 @@ impl Aig {
 
     pub fn unroll(&mut self, from: &Aig) {
         let mut next_map = GHashMap::new();
-        let false_edge = AigEdge::constant(false);
+        let false_edge = Lit::constant(false);
         next_map.insert(false_edge.var(), false_edge);
         for l in self.latchs.iter() {
             next_map.insert(l.input, l.next);
@@ -55,18 +55,18 @@ impl Aig {
             if from.nodes[i].is_and() {
                 let fanin0 = self.nodes[i].fanin0();
                 let fanin1 = self.nodes[i].fanin1();
-                let fanin0 = next_map[&fanin0.var()].not_if(fanin0.compl());
-                let fanin1 = next_map[&fanin1.var()].not_if(fanin1.compl());
+                let fanin0 = next_map[&fanin0.var()].not_if(!fanin0.polarity());
+                let fanin1 = next_map[&fanin1.var()].not_if(!fanin1.polarity());
                 let next = self.new_and_node(fanin0, fanin1);
                 next_map.insert(v, next);
             } else {
                 let input = self.new_leaf_node();
                 self.inputs.push(input);
-                let next: AigEdge = input.into();
+                let next: Lit = input.into();
                 next_map.insert(v, next);
             }
         }
-        let edge_map = |e: AigEdge| next_map[&e.var()].not_if(e.compl());
+        let edge_map = |e: Lit| next_map[&e.var()].not_if(!e.polarity());
         for (f, s) in from.latchs.iter().zip(self.latchs.iter_mut()) {
             s.next = edge_map(f.next);
         }
@@ -110,23 +110,24 @@ impl Aig {
         for l in other.latchs.iter() {
             let mut l = *l;
             l.input = map(l.input);
-            l.next = l.next.map(&map);
+            l.next = l.next.map_var(map);
             self.latchs.push(l);
         }
         for l in other.outputs.iter() {
-            self.outputs.push(l.map(&map));
+            self.outputs.push(l.map_var(map));
         }
         for l in other.bads.iter() {
-            self.bads.push(l.map(&map));
+            self.bads.push(l.map_var(map));
         }
         for l in other.constraints.iter() {
-            self.constraints.push(l.map(&map));
+            self.constraints.push(l.map_var(map));
         }
         for j in other.justice.iter() {
-            self.justice.push(j.iter().map(|e| e.map(&map)).collect());
+            self.justice
+                .push(j.iter().map(|e| e.map_var(map)).collect());
         }
         for l in other.fairness.iter() {
-            self.fairness.push(l.map(&map));
+            self.fairness.push(l.map_var(map));
         }
     }
 
@@ -150,7 +151,7 @@ impl Aig {
             }
         }
         assert!(max_id + 1 == self.nodes.len());
-        let edge_map = |e: AigEdge| e.map(&|v| encode_map[*v]);
+        let edge_map = |e: Lit| e.map_var(|v| encode_map[*v]);
         for &l in self.inputs.iter() {
             assert!(res.new_input() == encode_map[*l]);
         }
@@ -188,7 +189,7 @@ impl Aig {
         let latch = res.new_leaf_node();
         let constrains = res.new_ands_node(res.constraints.clone());
         let next = res.new_and_node(latch.into(), constrains);
-        res.add_latch(latch, next, Some(AigEdge::constant(true)));
+        res.add_latch(latch, next, Some(Lit::constant(true)));
         if !res.bads.is_empty() {
             res.bads[0] = res.new_and_node(next, res.bads[0]);
         }
@@ -199,7 +200,7 @@ impl Aig {
         res
     }
 
-    pub fn compress_property(&mut self) -> Vec<AigEdge> {
+    pub fn compress_property(&mut self) -> Vec<Lit> {
         let b = take(&mut self.bads);
         let p = self.new_ors_node(b.clone());
         self.bads.push(p);
@@ -210,7 +211,7 @@ impl Aig {
         let mut gate_init = Vec::new();
         for l in self.latchs.iter_mut() {
             if let Some(init) = l.init
-                && !init.is_const()
+                && !init.var().is_constant()
             {
                 gate_init.push((l.input, init));
                 l.init = None;
@@ -219,11 +220,11 @@ impl Aig {
         if gate_init.is_empty() {
             return;
         }
-        let init: AigEdge = self
-            .new_latch(AigEdge::constant(false), Some(AigEdge::constant(true)))
+        let init: Lit = self
+            .new_latch(Lit::constant(false), Some(Lit::constant(true)))
             .into();
         for (l, gi) in gate_init {
-            let l = AigEdge::from(l.lit());
+            let l = l.lit();
             let eq = self.new_eq_node(l, gi);
             let init_eq = self.new_imply_node(init, eq);
             self.constraints.push(init_eq);

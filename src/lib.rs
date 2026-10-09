@@ -8,172 +8,39 @@ mod ternary;
 use giputils::{gvec::Gvec, hash::GHashMap};
 use logicrs::{Lit, Var};
 use std::{
-    fmt,
     mem::swap,
-    ops::{Index, Not, Range},
+    ops::{Index, Range},
     vec,
 };
 pub use ternary::*;
 
-#[derive(Clone, Copy, Hash, PartialEq, Eq)]
-pub struct AigEdge(Lit);
-
-impl fmt::Debug for AigEdge {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-impl Not for AigEdge {
-    type Output = AigEdge;
-
-    #[inline]
-    fn not(self) -> Self::Output {
-        Self(!self.0)
-    }
-}
-
-impl From<usize> for AigEdge {
-    #[inline]
-    fn from(value: usize) -> Self {
-        Self(Var::new(value).lit())
-    }
-}
-
-impl From<Var> for AigEdge {
-    #[inline]
-    fn from(value: Var) -> Self {
-        Self(value.lit())
-    }
-}
-
-impl From<Lit> for AigEdge {
-    #[inline]
-    fn from(value: Lit) -> Self {
-        Self(value)
-    }
-}
-
-impl From<AigEdge> for Lit {
-    #[inline]
-    fn from(value: AigEdge) -> Self {
-        value.0
-    }
-}
-
-impl PartialOrd for AigEdge {
-    #[inline]
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for AigEdge {
-    #[inline]
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.var().cmp(&other.var())
-    }
-}
-
-impl AigEdge {
-    pub const NONE: AigEdge = AigEdge(Lit::NONE);
-
-    #[inline]
-    pub const fn is_none(&self) -> bool {
-        self.0.is_none()
-    }
-
-    #[inline]
-    pub const fn new(id: usize, complement: bool) -> Self {
-        Self(Lit::new(Var::new(id), !complement))
-    }
-
-    #[inline]
-    pub fn var(&self) -> Var {
-        self.0.var()
-    }
-
-    #[inline]
-    pub fn compl(&self) -> bool {
-        !self.0.polarity()
-    }
-
-    #[inline]
-    pub fn set_var(&mut self, v: Var) {
-        self.0 = Lit::new(v, self.0.polarity());
-    }
-
-    #[inline]
-    pub fn set_compl(&mut self, compl: bool) {
-        self.0 = Lit::new(self.0.var(), !compl)
-    }
-
-    #[inline]
-    pub fn not_if(self, x: bool) -> Self {
-        Self(self.0.not_if(x))
-    }
-
-    #[inline]
-    pub const fn constant(polarity: bool) -> Self {
-        Self(Lit::constant(polarity))
-    }
-
-    #[inline]
-    pub fn is_const(&self) -> bool {
-        self.0.var().is_constant()
-    }
-
-    #[inline]
-    pub fn is_constant(&self, polarity: bool) -> bool {
-        self.0.is_constant(polarity)
-    }
-
-    #[inline]
-    pub fn try_to_constant(self) -> Option<bool> {
-        self.0.try_constant()
-    }
-
-    #[inline]
-    pub fn to_constant(self) -> bool {
-        self.try_to_constant().unwrap()
-    }
-
-    #[inline]
-    pub fn map<M>(&self, map: &M) -> Self
-    where
-        M: Fn(Var) -> Var,
-    {
-        Self(self.0.map_var(map))
-    }
-}
-
 #[derive(Debug, Clone, Copy)]
 pub struct AigLatch {
     pub input: Var,
-    pub next: AigEdge,
-    pub init: Option<AigEdge>,
+    pub next: Lit,
+    pub init: Option<Lit>,
 }
 
 impl AigLatch {
-    pub fn new(input: Var, next: AigEdge, init: Option<AigEdge>) -> Self {
+    pub fn new(input: Var, next: Lit, init: Option<Lit>) -> Self {
         Self { input, next, init }
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AigNode {
-    pub fanin0: AigEdge,
-    pub fanin1: AigEdge,
+    pub fanin0: Lit,
+    pub fanin1: Lit,
 }
 
 impl AigNode {
     pub const LEAF: Self = Self {
-        fanin0: AigEdge::NONE,
-        fanin1: AigEdge::NONE,
+        fanin0: Lit::NONE,
+        fanin1: Lit::NONE,
     };
 
     #[inline]
-    pub fn new_and(mut fanin0: AigEdge, mut fanin1: AigEdge) -> Self {
+    pub fn new_and(mut fanin0: Lit, mut fanin1: Lit) -> Self {
         debug_assert!(!fanin0.is_none() && !fanin1.is_none());
         if fanin0.var() > fanin1.var() {
             swap(&mut fanin0, &mut fanin1);
@@ -192,7 +59,7 @@ impl AigNode {
     }
 
     #[inline]
-    pub fn fanin0(&self) -> AigEdge {
+    pub fn fanin0(&self) -> Lit {
         if self.is_and() {
             self.fanin0
         } else {
@@ -201,7 +68,7 @@ impl AigNode {
     }
 
     #[inline]
-    pub fn fanin1(&self) -> AigEdge {
+    pub fn fanin1(&self) -> Lit {
         if self.is_and() {
             self.fanin1
         } else {
@@ -210,7 +77,7 @@ impl AigNode {
     }
 
     #[inline]
-    pub fn fanin(&self) -> (AigEdge, AigEdge) {
+    pub fn fanin(&self) -> (Lit, Lit) {
         if self.is_and() {
             (self.fanin0, self.fanin1)
         } else {
@@ -219,7 +86,7 @@ impl AigNode {
     }
 
     #[inline]
-    pub fn set_fanin0(&mut self, fanin: AigEdge) {
+    pub fn set_fanin0(&mut self, fanin: Lit) {
         if self.is_and() {
             self.fanin0 = fanin;
         } else {
@@ -228,7 +95,7 @@ impl AigNode {
     }
 
     #[inline]
-    pub fn set_fanin1(&mut self, fanin: AigEdge) {
+    pub fn set_fanin1(&mut self, fanin: Lit) {
         if self.is_and() {
             self.fanin1 = fanin;
         } else {
@@ -243,8 +110,8 @@ impl AigNode {
     {
         if self.is_and() {
             Self {
-                fanin0: self.fanin0.map(map),
-                fanin1: self.fanin1.map(map),
+                fanin0: self.fanin0.map_var(map),
+                fanin1: self.fanin1.map_var(map),
             }
         } else {
             panic!();
@@ -257,11 +124,11 @@ pub struct Aig {
     pub nodes: Gvec<AigNode>,
     pub inputs: Vec<Var>,
     pub latchs: Vec<AigLatch>,
-    pub outputs: Vec<AigEdge>,
-    pub bads: Vec<AigEdge>,
-    pub constraints: Vec<AigEdge>,
-    pub justice: Vec<Vec<AigEdge>>,
-    pub fairness: Vec<AigEdge>,
+    pub outputs: Vec<Lit>,
+    pub bads: Vec<Lit>,
+    pub constraints: Vec<Lit>,
+    pub justice: Vec<Vec<Lit>>,
+    pub fairness: Vec<Lit>,
     pub symbols: GHashMap<Var, String>,
 }
 
@@ -299,63 +166,63 @@ impl Aig {
     }
 
     #[inline]
-    pub fn new_latch(&mut self, next: AigEdge, init: Option<AigEdge>) -> Var {
+    pub fn new_latch(&mut self, next: Lit, init: Option<Lit>) -> Var {
         let input = self.new_leaf_node();
         self.latchs.push(AigLatch::new(input, next, init));
         input
     }
 
     #[inline]
-    pub fn add_latch(&mut self, input: Var, next: AigEdge, init: Option<AigEdge>) {
+    pub fn add_latch(&mut self, input: Var, next: Lit, init: Option<Lit>) {
         self.latchs.push(AigLatch::new(input, next, init))
     }
 
     #[inline]
-    pub fn trivial_new_and_node(&mut self, fanin0: AigEdge, fanin1: AigEdge) -> AigEdge {
+    pub fn trivial_new_and_node(&mut self, fanin0: Lit, fanin1: Lit) -> Lit {
         let nodeid = self.nodes.len();
         let and = AigNode::new_and(fanin0, fanin1);
         self.nodes.push(and);
-        nodeid.into()
+        Var::new(nodeid).lit()
     }
 
     #[inline]
-    pub fn new_and_node(&mut self, mut fanin0: AigEdge, mut fanin1: AigEdge) -> AigEdge {
+    pub fn new_and_node(&mut self, mut fanin0: Lit, mut fanin1: Lit) -> Lit {
         if fanin0.var() > fanin1.var() {
             swap(&mut fanin0, &mut fanin1);
         }
-        if fanin0 == AigEdge::constant(true) {
+        if fanin0 == Lit::constant(true) {
             return fanin1;
         }
-        if fanin0 == AigEdge::constant(false) {
-            return AigEdge::constant(false);
+        if fanin0 == Lit::constant(false) {
+            return Lit::constant(false);
         }
-        if fanin1 == AigEdge::constant(true) {
+        if fanin1 == Lit::constant(true) {
             return fanin0;
         }
-        if fanin1 == AigEdge::constant(false) {
-            return AigEdge::constant(false);
+        if fanin1 == Lit::constant(false) {
+            return Lit::constant(false);
         }
         if fanin0 == fanin1 {
             fanin0
         } else if fanin0 == !fanin1 {
-            AigEdge::constant(false)
+            Lit::constant(false)
         } else {
             self.trivial_new_and_node(fanin0, fanin1)
         }
     }
 
-    pub fn trivial_new_or_node(&mut self, fanin0: AigEdge, fanin1: AigEdge) -> AigEdge {
+    pub fn trivial_new_or_node(&mut self, fanin0: Lit, fanin1: Lit) -> Lit {
         !self.trivial_new_and_node(!fanin0, !fanin1)
     }
 
-    pub fn new_or_node(&mut self, fanin0: AigEdge, fanin1: AigEdge) -> AigEdge {
+    pub fn new_or_node(&mut self, fanin0: Lit, fanin1: Lit) -> Lit {
         !self.new_and_node(!fanin0, !fanin1)
     }
 
-    pub fn trivial_new_ands_node(&mut self, fanin: impl IntoIterator<Item = AigEdge>) -> AigEdge {
+    pub fn trivial_new_ands_node(&mut self, fanin: impl IntoIterator<Item = Lit>) -> Lit {
         let fanin: Vec<_> = fanin.into_iter().collect();
         if fanin.is_empty() {
-            AigEdge::constant(true)
+            Lit::constant(true)
         } else if fanin.len() == 1 {
             fanin[0]
         } else {
@@ -367,14 +234,14 @@ impl Aig {
         }
     }
 
-    pub fn new_ands_node(&mut self, fanin: impl IntoIterator<Item = AigEdge>) -> AigEdge {
+    pub fn new_ands_node(&mut self, fanin: impl IntoIterator<Item = Lit>) -> Lit {
         let fanin: Vec<_> = fanin.into_iter().collect();
         if fanin.is_empty() {
-            AigEdge::constant(true)
+            Lit::constant(true)
         } else if fanin.len() == 1 {
             fanin[0]
         } else {
-            let mut res = AigEdge::constant(true);
+            let mut res = Lit::constant(true);
             for f in fanin {
                 res = self.new_and_node(res, f);
             }
@@ -382,19 +249,19 @@ impl Aig {
         }
     }
 
-    pub fn trivial_new_ors_node(&mut self, fanin: impl IntoIterator<Item = AigEdge>) -> AigEdge {
+    pub fn trivial_new_ors_node(&mut self, fanin: impl IntoIterator<Item = Lit>) -> Lit {
         !self.trivial_new_ands_node(fanin.into_iter().map(|e| !e))
     }
 
-    pub fn new_ors_node(&mut self, fanin: impl IntoIterator<Item = AigEdge>) -> AigEdge {
+    pub fn new_ors_node(&mut self, fanin: impl IntoIterator<Item = Lit>) -> Lit {
         !self.new_ands_node(fanin.into_iter().map(|e| !e))
     }
 
-    pub fn new_imply_node(&mut self, fanin0: AigEdge, fanin1: AigEdge) -> AigEdge {
+    pub fn new_imply_node(&mut self, fanin0: Lit, fanin1: Lit) -> Lit {
         self.new_or_node(!fanin0, fanin1)
     }
 
-    pub fn new_eq_node(&mut self, fanin0: AigEdge, fanin1: AigEdge) -> AigEdge {
+    pub fn new_eq_node(&mut self, fanin0: Lit, fanin1: Lit) -> Lit {
         let x = self.new_and_node(fanin0, fanin1);
         let y = self.new_and_node(!fanin0, !fanin1);
         self.new_or_node(x, y)
@@ -424,10 +291,7 @@ impl Aig {
         0..self.num_nodes()
     }
 
-    pub fn fanin_logic_cone<'a, I: IntoIterator<Item = &'a AigEdge>>(
-        &self,
-        logic: I,
-    ) -> Gvec<bool> {
+    pub fn fanin_logic_cone<'a, I: IntoIterator<Item = &'a Lit>>(&self, logic: I) -> Gvec<bool> {
         let mut flag = Gvec::from(vec![false; self.num_nodes() as _]);
         for l in logic {
             flag[*l.var()] = true;

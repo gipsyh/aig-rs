@@ -36,8 +36,6 @@ impl Aig {
                     if let Some((xor0, xor1)) = self.is_xor(Var(i)) {
                         refs[*xor0.var()] = true;
                         refs[*xor1.var()] = true;
-                        let xor0 = xor0.into();
-                        let xor1 = xor1.into();
                         ans.add_rel_owned(n.var(), LitVvec::cnf_xor(n, xor0, xor1));
                         continue;
                     }
@@ -45,9 +43,6 @@ impl Aig {
                         refs[*c.var()] = true;
                         refs[*t.var()] = true;
                         refs[*e.var()] = true;
-                        let c = c.into();
-                        let t = t.into();
-                        let e = e.into();
                         ans.add_rel_owned(n.var(), LitVvec::cnf_ite(n, c, t, e));
                         continue;
                     }
@@ -56,10 +51,7 @@ impl Aig {
                 let fanin1 = self.nodes[i].fanin1();
                 refs[*fanin0.var()] = true;
                 refs[*fanin1.var()] = true;
-                ans.add_rel_owned(
-                    n.var(),
-                    LitVvec::cnf_and(n, &[fanin0.into(), fanin1.into()]),
-                );
+                ans.add_rel_owned(n.var(), LitVvec::cnf_and(n, &[fanin0, fanin1]));
             }
         }
         ans
@@ -183,12 +175,12 @@ impl Aig {
 
     fn gate_cnf(&self, n: Var) -> LitVvec {
         let mut rel = if let Some((x, y)) = self.is_xor(n) {
-            LitVvec::cnf_xor(n.lit(), x.into(), y.into())
+            LitVvec::cnf_xor(n.lit(), x, y)
         } else if let Some((c, t, e)) = self.is_ite(n) {
-            LitVvec::cnf_ite(n.lit(), c.into(), t.into(), e.into())
+            LitVvec::cnf_ite(n.lit(), c, t, e)
         } else {
             let (a, b) = self.nodes[*n].fanin();
-            LitVvec::cnf_and(n.lit(), &[a.into(), b.into()])
+            LitVvec::cnf_and(n.lit(), &[a, b])
         };
         for clause in rel.iter_mut() {
             clause.sort_unstable();
