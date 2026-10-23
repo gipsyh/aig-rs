@@ -135,6 +135,7 @@ impl Aig {
         let mut res = Self::new();
         let mut encode_map = Gvec::new();
         encode_map.reserve(self.nodes.len());
+        encode_map[*Var::CONST] = Var::CONST;
         let mut max_id = 0;
         for &l in self.inputs.iter() {
             max_id += 1;
@@ -229,5 +230,34 @@ impl Aig {
             let init_eq = self.new_imply_node(init, eq);
             self.constraints.push(init_eq);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Aig;
+    use logicrs::Lit;
+
+    #[test]
+    fn reencode_keeps_constant_literals() {
+        // One latch with the constant 0 as its next state, bad = the latch.
+        let a = Aig::read_aiger(b"aag 1 0 1 0 0 1\n2 0\n2\n").unwrap();
+        let r = a.reencode();
+        assert_eq!(r.latchs.len(), 1);
+        assert_eq!(r.latchs[0].next, Lit::constant(false));
+        assert_eq!(r.bads, vec![r.latchs[0].input.lit()]);
+        assert_eq!(r.to_string(), "aag 1 0 1 0 0 1\n2 0\n2\n");
+        let mut bytes = Vec::new();
+        r.write_aiger(&mut bytes, false).unwrap();
+        let back = Aig::read_aiger(&bytes).unwrap();
+        assert_eq!(back.latchs[0].next, Lit::constant(false));
+
+        // The constant 1 as a next state, an AND fanin and an output.
+        let a = Aig::read_aiger(b"aag 3 1 1 1 1 1\n2\n4 1\n1\n6\n6 2 1\n").unwrap();
+        let r = a.reencode();
+        assert_eq!(r.latchs[0].next, Lit::constant(true));
+        assert_eq!(r.outputs, vec![Lit::constant(true)]);
+        assert_eq!(r.nodes[3usize].fanin(), a.nodes[3usize].fanin());
+        assert_eq!(r.to_string(), a.to_string());
     }
 }
